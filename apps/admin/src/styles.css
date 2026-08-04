@@ -21,7 +21,7 @@
 body {
   margin: 0;
   min-width: 1100px;
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.45;
 }
 
@@ -71,7 +71,7 @@ input {
   transform: rotate(180deg);
   text-decoration: none;
   color: #737d78;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   display: flex;
@@ -87,7 +87,7 @@ input {
 
 .rail nav a span {
   font-family: "DM Mono";
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .rail nav a.active {
@@ -99,7 +99,7 @@ input {
   margin-bottom: 28px;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font: 11px "DM Mono";
+  font: 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #8d9792;
@@ -138,13 +138,13 @@ input {
 .kicker {
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  font: 500 12px "DM Mono";
+  font: 500 13px "DM Mono";
   color: var(--muted);
   margin: 0 0 12px;
 }
 
 .topbar h1 {
-  font-size: 42px;
+  font-size: 44px;
   line-height: 1.05;
   letter-spacing: -0.04em;
   margin: 0;
@@ -163,12 +163,12 @@ input {
 }
 
 .summary strong {
-  font: 500 30px "DM Mono";
+  font: 500 32px "DM Mono";
   line-height: 1;
 }
 
 .summary span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -177,7 +177,7 @@ input {
 
 .summary .summary-wide strong {
   max-width: 220px;
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.25;
   text-align: right;
 }
@@ -187,14 +187,14 @@ input {
   border-left: 3px solid #d57d17;
   margin-top: 20px;
   padding: 16px 18px;
-  font-size: 15px;
+  font-size: 16px;
   display: flex;
   gap: 18px;
   align-items: center;
 }
 
 .error span {
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   color: #94500d;
 }
@@ -227,7 +227,7 @@ input {
   background: transparent;
   padding: 12px 0;
   outline: none;
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .toolbar input:focus {
@@ -237,7 +237,7 @@ input {
 .legend {
   display: flex;
   gap: 24px;
-  font: 12px "DM Mono";
+  font: 13px "DM Mono";
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -268,7 +268,7 @@ input {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(720px, 1fr) minmax(470px, 520px);
+  grid-template-columns: minmax(740px, 1fr) minmax(520px, 580px);
   height: calc(100vh - 268px);
   min-height: 650px;
   border: 1px solid var(--line);
@@ -291,7 +291,7 @@ th {
   height: 62px;
   padding: 0 24px;
   text-align: left;
-  font: 500 12px "DM Mono";
+  font: 500 13px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
@@ -334,10 +334,10 @@ td:last-child {
 }
 
 td {
-  height: 96px;
+  height: 102px;
   padding: 16px 24px;
   border-bottom: 1px solid #e7e5e0;
-  font-size: 16px;
+  font-size: 17px;
   transition: background 150ms ease;
 }
 
@@ -364,14 +364,14 @@ td strong {
 td small {
   display: block;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 6px;
 }
 
 td small.tenant-state {
   margin-top: 8px;
   color: #8a641b;
-  font: 500 9px "DM Mono";
+  font: 500 11px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -388,10 +388,10 @@ td small.tenant-state.issue {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 13px;
   border-radius: 99px;
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.05em;
   background: #e8e7e3;
@@ -442,17 +442,17 @@ td small.tenant-state.issue {
   padding: 100px 30px;
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .empty p {
   color: var(--ink);
   margin: 0 0 6px;
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .inspector {
-  padding: 38px;
+  padding: 42px;
   background: #fdfcf9;
   overflow: auto;
 }
@@ -466,11 +466,11 @@ td small.tenant-state.issue {
 }
 
 .inspector-head h2 {
-  font-size: 25px;
+  font-size: 28px;
   line-height: 1.2;
   letter-spacing: -0.03em;
   margin: 0;
-  max-width: 330px;
+  max-width: 380px;
   overflow-wrap: anywhere;
 }
 
@@ -480,7 +480,7 @@ td small.tenant-state.issue {
 }
 
 .evidence > p {
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.65;
   color: #4f5753;
   margin: 0 0 26px;
@@ -502,14 +502,14 @@ td small.tenant-state.issue {
 .signals dt,
 .checks h3,
 .versions h3 {
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .evidence dd {
-  font-size: 15px;
+  font-size: 16px;
   margin: 6px 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -530,7 +530,7 @@ td small.tenant-state.issue {
 
 .runtime-head h3 {
   margin: 0;
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
@@ -540,7 +540,7 @@ td small.tenant-state.issue {
   padding: 7px 9px;
   background: #fff0d3;
   color: #795000;
-  font: 500 9px "DM Mono";
+  font: 500 11px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -559,25 +559,25 @@ td small.tenant-state.issue {
 
 .runtime dd {
   margin: 5px 0 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
 }
 
 .runtime p {
   margin: 18px 0 0;
   color: #9a3e2c;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
 .runtime button {
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   margin-top: 20px;
   border: 1px solid #bbbdb8;
   background: transparent;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
 }
 
@@ -601,14 +601,14 @@ td small.tenant-state.issue {
 
 .signals-head h3 {
   margin: 0;
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .evidence-state {
-  font: 500 9px "DM Mono";
+  font: 500 11px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #795000;
@@ -635,13 +635,13 @@ td small.tenant-state.issue {
 
 .signals dd {
   margin: 5px 0 0;
-  font: 500 20px "DM Mono";
+  font: 500 22px "DM Mono";
 }
 
 .signals > p {
   margin: 20px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -664,7 +664,7 @@ td small.tenant-state.issue {
 
 .quality-head > span {
   color: var(--muted);
-  font: 500 11px "DM Mono";
+  font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -691,14 +691,14 @@ td small.tenant-state.issue {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .quality li p,
 .quality-empty {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -707,7 +707,7 @@ td small.tenant-state.issue {
   padding: 5px 7px;
   background: #f0eee9;
   color: #676e6a;
-  font: 500 9px "DM Mono";
+  font: 500 11px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -743,7 +743,7 @@ td small.tenant-state.issue {
 }
 
 .checks li {
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
   background: #f0eee9;
   padding: 11px 6px;
@@ -764,7 +764,7 @@ td small.tenant-state.issue {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 14px;
+  font-size: 15px;
   padding: 7px 0;
 }
 
@@ -786,13 +786,13 @@ td small.tenant-state.issue {
 
 .actions button,
 .button {
-  min-height: 50px;
+  min-height: 52px;
   border: 1px solid var(--blue);
   background: var(--blue);
   color: white;
   text-decoration: none;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: 15px;
   text-align: center;
   cursor: pointer;
   transition: transform 150ms ease, background 150ms ease;
@@ -845,13 +845,13 @@ td small.tenant-state.issue {
 
 .inspector-empty h2 {
   color: var(--ink);
-  font-size: 22px;
+  font-size: 24px;
   margin: 14px 0 5px;
 }
 
 .inspector-empty p {
-  font-size: 14px;
-  max-width: 280px;
+  font-size: 15px;
+  max-width: 320px;
   line-height: 1.6;
 }
 
@@ -871,14 +871,14 @@ td small.tenant-state.issue {
 
 .ledger-toolbar h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.02em;
 }
 
 .ledger-toolbar p {
   margin: 7px 0 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .ledger-toolbar button {
@@ -967,7 +967,7 @@ td small.tenant-state.issue {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 12px "DM Mono";
+  font: 13px "DM Mono";
   color: var(--muted);
 }
 
@@ -1019,7 +1019,7 @@ td small.tenant-state.issue {
   }
 
   .content-grid {
-    grid-template-columns: minmax(620px, 1fr) 420px;
+    grid-template-columns: minmax(640px, 1fr) 460px;
   }
 
   .inspector {
