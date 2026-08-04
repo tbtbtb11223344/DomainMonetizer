@@ -76,7 +76,7 @@ export default {
   fetch: app.fetch,
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
     const task = controller.cron === HEALTH_CRON
-      ? checkPublishedTenants(env, new Date(controller.scheduledTime)).then((batch) => {
+      ? checkPublishedTenants(env, new Date(controller.scheduledTime), fetch, "scheduled").then((batch) => {
         if (batch.truncated) throw new Error(`Tenant health check reached its ${batch.checked}-domain pilot limit`);
         console.log(JSON.stringify({ level: batch.ready === batch.checked ? "info" : "warn", task: "tenant_health", ...batch }));
       })

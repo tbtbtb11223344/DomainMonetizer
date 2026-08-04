@@ -17,7 +17,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
 import { decideEvidence } from "./evidence";
-import { checkPublishedTenants, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow } from "./health";
+import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow, type ScheduledTenantHealthRow } from "./health";
 import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
@@ -168,6 +168,12 @@ export function mountApi(app: App): void {
     const coverageTarget = rollupCoverageTarget(telemetryStartDate, observedFullDays, through, coverageNow);
     const expectedDays = coverageTarget.expectedFullDays;
     const rollupCoverageComplete = coverageTarget.complete;
+    const healthWindowEnd = new Date(`${latestCompletedDate}T00:00:00.000Z`);
+    healthWindowEnd.setUTCDate(healthWindowEnd.getUTCDate() + 1);
+    const scheduledHealth = expectedDays > 0
+      ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
+        .bind(`${telemetryStartDate}T00:00:00.000Z`, healthWindowEnd.toISOString()).all<ScheduledTenantHealthRow>()
+      : { results: [] as ScheduledTenantHealthRow[] };
     const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {
       sum.likelyHumanViews += Number(row.likely_human_views ?? 0);
       sum.uniqueVisitors += Number(row.unique_visitors ?? 0);
@@ -178,12 +184,19 @@ export function mountApi(app: App): void {
     }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     const samplingDetected = totals.maxSampleInterval > 1;
     const sessionSamplingDetected = totals.uniqueSampleInterval > 1;
-    const { health, healthChecks, allTenantsReady } = summarizeTenantHealth(domains.results, latestHealth.results, coverageNow);
+    const { health, healthChecks, allTenantsReady, allTenantsReliable } = summarizeTenantHealth(
+      domains.results,
+      latestHealth.results,
+      coverageNow,
+      scheduledHealth.results,
+      expectedDays * SCHEDULED_HEALTH_CHECKS_PER_DAY,
+    );
     const decision = decideEvidence({
       observedFullDays,
       minimumReviewDays: 14,
       rollupCoverageComplete,
       allTenantsReady,
+      allTenantsReliable,
       sessionSamplingDetected,
       qualifiedSessions: totals.uniqueVisitors,
       minimumQualifiedSessions: 10,
@@ -269,7 +282,7 @@ export function mountApi(app: App): void {
     const metrics = await c.env.DB.prepare("SELECT * FROM daily_domain_metrics WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
     const countryMetrics = await c.env.DB.prepare("SELECT country,SUM(views) AS views,SUM(likely_human_views) AS likely_human_views,SUM(human_engaged_visits) AS human_engaged_visits FROM daily_domain_country_metrics WHERE domain_id=? GROUP BY country ORDER BY likely_human_views DESC,views DESC LIMIT 10").bind(domain.id).all();
     const sourceMetrics = await c.env.DB.prepare("SELECT visitor_class,classification_reason,country,asn,as_org,SUM(views) AS views,SUM(engaged_visits) AS engaged_visits FROM daily_domain_source_metrics WHERE domain_id=? AND metric_date>=? GROUP BY visitor_class,classification_reason,country,asn,as_org ORDER BY views DESC,engaged_visits DESC LIMIT 12").bind(domain.id, c.env.TELEMETRY_MIN_DATE ?? "0000-01-01").all();
-    const healthChecks = await c.env.DB.prepare("SELECT status,http_status,latency_ms,expected_release_id,observed_release_id,error_message,checked_at FROM tenant_health_checks WHERE domain_id=? ORDER BY checked_at DESC LIMIT 20").bind(domain.id).all();
+    const healthChecks = await c.env.DB.prepare("SELECT status,http_status,latency_ms,expected_release_id,observed_release_id,error_message,checked_at,check_source FROM tenant_health_checks WHERE domain_id=? ORDER BY checked_at DESC LIMIT 20").bind(domain.id).all();
     return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results, sourceMetrics: sourceMetrics.results, healthChecks: healthChecks.results });
   });
 

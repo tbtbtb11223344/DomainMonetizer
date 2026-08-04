@@ -6,6 +6,7 @@ const ready: EvidenceInputs = {
   minimumReviewDays: 14,
   rollupCoverageComplete: true,
   allTenantsReady: true,
+  allTenantsReliable: true,
   sessionSamplingDetected: false,
   qualifiedSessions: 10,
   minimumQualifiedSessions: 10,
@@ -21,8 +22,9 @@ describe("scale-review evidence decision", () => {
       ...ready,
       rollupCoverageComplete: false,
       allTenantsReady: false,
+      allTenantsReliable: false,
       sessionSamplingDetected: true,
-    })).toEqual({ status: "collecting", blockers: ["rollup_coverage", "tenant_readiness", "qualified_session_sampling"] });
+    })).toEqual({ status: "collecting", blockers: ["rollup_coverage", "tenant_readiness", "tenant_reliability", "qualified_session_sampling"] });
   });
 
   it("distinguishes insufficient natural traffic from an operational defect", () => {

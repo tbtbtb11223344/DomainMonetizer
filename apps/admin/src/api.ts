@@ -68,6 +68,7 @@ export interface TenantHealthCheck {
   observed_release_id: string | null;
   error_message: string | null;
   checked_at: string;
+  check_source: "manual" | "scheduled";
 }
 
 export interface CurrentTenantHealth {
@@ -82,6 +83,12 @@ export interface CurrentTenantHealth {
   checkedAt: string | null;
   fresh: boolean;
   releaseMatches: boolean;
+  scheduledChecks: number;
+  expectedScheduledChecks: number;
+  readyScheduledChecks: number;
+  scheduleCoverage: number;
+  readinessRate: number;
+  reliable: boolean;
 }
 
 export interface DomainMetricSummary {
@@ -113,7 +120,7 @@ export interface MetricsOverview {
   minimumReviewDays: number;
   totals: { likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number };
   domains: DomainMetricSummary[];
-  health: { published: number; ready: number; failing: number; stale: number; unchecked: number; lastCheckedAt: string | null };
+  health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];
   sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean };
   reviewBlockers: string[];
