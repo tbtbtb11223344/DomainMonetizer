@@ -21,6 +21,8 @@ import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeTenant
 import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
+const HOME_SERVICES_TEMPLATE_VERSION_ID = "tpl-home-services-v2";
+
 type App = Hono<{ Bindings: Env; Variables: Variables }>;
 
 interface OverviewDomainRow extends HealthPortfolioDomain {
@@ -149,8 +151,8 @@ async function persistPublishedRelease(
   const serialized = JSON.stringify(snapshot);
   const checksum = await sha256Hex(serialized);
   const timestamp = nowIso();
-  await env.DB.prepare("INSERT INTO release_versions (id, domain_id, version, template_version_id, content_version_id, snapshot_json, snapshot_sha256, status, created_by, created_at) VALUES (?, ?, ?, 'tpl-home-services-v1', ?, ?, ?, 'compiled', ?, ?)")
-    .bind(snapshot.releaseId, domain.id, releaseVersion, contentRow.id, serialized, checksum, actor, timestamp)
+  await env.DB.prepare("INSERT INTO release_versions (id, domain_id, version, template_version_id, content_version_id, snapshot_json, snapshot_sha256, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'compiled', ?, ?)")
+    .bind(snapshot.releaseId, domain.id, releaseVersion, HOME_SERVICES_TEMPLATE_VERSION_ID, contentRow.id, serialized, checksum, actor, timestamp)
     .run();
   await env.SITE_CONFIG.put(releaseKey(snapshot.releaseId), serialized);
   await switchActivePointer(env.SITE_CONFIG, domain.hostname, snapshot.releaseId, domain.active_release_id, () => env.DB.batch([

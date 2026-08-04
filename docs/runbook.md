@@ -38,6 +38,8 @@ pnpm --dir apps/control exec wrangler versions upload --keep-vars
 pnpm --dir apps/control exec wrangler versions deploy <version-id>@100% --yes
 ```
 
+After a control deployment, do not immediately publish content. First confirm `wrangler deployments status` reports the intended version at 100%, then call an authenticated `/api/content/:id/preview` for an approved test item until its rendered HTML contains the expected current-template marker or identity. Cloudflare can briefly serve the outgoing Worker while a new deployment propagates; a successful deployment command alone is not proof that the compiler serving API requests has changed.
+
 The committed pilot evidence collector is read-only. Exact verification should be run immediately before a registrar mutation:
 
 ```powershell
