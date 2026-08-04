@@ -6,6 +6,9 @@ export const HEALTH_CHECK_CONCURRENCY = 5;
 export const HEALTH_FRESH_MS = 8 * 60 * 60 * 1_000;
 export const HEALTH_RELIABILITY_THRESHOLD = 0.95;
 export const SCHEDULED_HEALTH_CHECKS_PER_DAY = 4;
+export const HEALTH_SCHEDULE_GRACE_MS = 10 * 60 * 1_000;
+const HEALTH_SCHEDULE_HOURS_UTC = [0, 6, 12, 18];
+const HEALTH_SCHEDULE_MINUTE_UTC = 47;
 const HEALTH_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
 const HEALTH_TIMEOUT_MS = 8_000;
 
@@ -91,6 +94,81 @@ export interface CurrentTenantHealth {
   scheduleCoverage: number;
   readinessRate: number;
   reliable: boolean;
+}
+
+export interface CurrentDayScheduleDomain {
+  domainId: string;
+  hostname: string;
+  observedChecks: number;
+  readyChecks: number;
+  expectedByNow: number;
+  requiredByNow: number;
+  onSchedule: boolean;
+  healthy: boolean;
+}
+
+export interface CurrentDayScheduleSummary {
+  date: string;
+  expectedByNowPerDomain: number;
+  requiredByNowPerDomain: number;
+  expectedChecks: number;
+  requiredChecks: number;
+  observedChecks: number;
+  readyChecks: number;
+  healthy: boolean;
+  domains: CurrentDayScheduleDomain[];
+}
+
+export function scheduledHealthSlots(now = new Date(), telemetryStartDate = "0000-01-01"): { expectedByNow: number; requiredByNow: number } {
+  const date = now.toISOString().slice(0, 10);
+  if (date < telemetryStartDate) return { expectedByNow: 0, requiredByNow: 0 };
+  let expectedByNow = 0;
+  let requiredByNow = 0;
+  for (const hour of HEALTH_SCHEDULE_HOURS_UTC) {
+    const scheduledAt = Date.parse(`${date}T${String(hour).padStart(2, "0")}:${HEALTH_SCHEDULE_MINUTE_UTC}:00.000Z`);
+    if (now.getTime() >= scheduledAt) expectedByNow += 1;
+    if (now.getTime() >= scheduledAt + HEALTH_SCHEDULE_GRACE_MS) requiredByNow += 1;
+  }
+  return { expectedByNow, requiredByNow };
+}
+
+export function summarizeCurrentDaySchedule(
+  domains: HealthPortfolioDomain[],
+  scheduledHealth: ScheduledTenantHealthRow[],
+  now = new Date(),
+  telemetryStartDate = "0000-01-01",
+): CurrentDayScheduleSummary {
+  const date = now.toISOString().slice(0, 10);
+  const { expectedByNow, requiredByNow } = scheduledHealthSlots(now, telemetryStartDate);
+  const scheduledByDomain = new Map(scheduledHealth.map((row) => [row.domain_id, row]));
+  const publishedDomains = domains.filter((domain) => domain.lifecycle_status === "published");
+  const currentDomains = publishedDomains.map<CurrentDayScheduleDomain>((domain) => {
+    const row = scheduledByDomain.get(domain.domain_id);
+    const observedChecks = Number(row?.scheduled_checks ?? 0);
+    const readyChecks = Number(row?.ready_scheduled_checks ?? 0);
+    const onSchedule = observedChecks >= requiredByNow && observedChecks <= expectedByNow;
+    return {
+      domainId: domain.domain_id,
+      hostname: domain.hostname,
+      observedChecks,
+      readyChecks,
+      expectedByNow,
+      requiredByNow,
+      onSchedule,
+      healthy: onSchedule && readyChecks === observedChecks,
+    };
+  });
+  return {
+    date,
+    expectedByNowPerDomain: expectedByNow,
+    requiredByNowPerDomain: requiredByNow,
+    expectedChecks: expectedByNow * publishedDomains.length,
+    requiredChecks: requiredByNow * publishedDomains.length,
+    observedChecks: currentDomains.reduce((sum, domain) => sum + domain.observedChecks, 0),
+    readyChecks: currentDomains.reduce((sum, domain) => sum + domain.readyChecks, 0),
+    healthy: publishedDomains.length > 0 && currentDomains.every((domain) => domain.healthy),
+    domains: currentDomains,
+  };
 }
 
 export function summarizeTenantHealth(

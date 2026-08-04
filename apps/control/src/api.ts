@@ -17,7 +17,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
 import { decideEvidence } from "./evidence";
-import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow, type ScheduledTenantHealthRow } from "./health";
+import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeCurrentDaySchedule, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow, type ScheduledTenantHealthRow } from "./health";
 import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
@@ -215,6 +215,13 @@ export function mountApi(app: App): void {
       ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
         .bind(`${telemetryStartDate}T00:00:00.000Z`, healthWindowEnd.toISOString()).all<ScheduledTenantHealthRow>()
       : { results: [] as ScheduledTenantHealthRow[] };
+    const currentDate = coverageNow.toISOString().slice(0, 10);
+    const currentDayEnd = new Date(`${currentDate}T00:00:00.000Z`);
+    currentDayEnd.setUTCDate(currentDayEnd.getUTCDate() + 1);
+    const currentDayScheduledHealth = currentDate >= telemetryStartDate
+      ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
+        .bind(`${currentDate}T00:00:00.000Z`, currentDayEnd.toISOString()).all<ScheduledTenantHealthRow>()
+      : { results: [] as ScheduledTenantHealthRow[] };
     const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {
       sum.likelyHumanViews += Number(row.likely_human_views ?? 0);
       sum.uniqueVisitors += Number(row.unique_visitors ?? 0);
@@ -240,6 +247,7 @@ export function mountApi(app: App): void {
       scheduledHealth.results,
       expectedDays * SCHEDULED_HEALTH_CHECKS_PER_DAY,
     );
+    const currentDaySchedule = summarizeCurrentDaySchedule(domains.results, currentDayScheduledHealth.results, coverageNow, telemetryStartDate);
     const decision = decideEvidence({
       observedFullDays,
       minimumReviewDays: 14,
@@ -265,6 +273,7 @@ export function mountApi(app: App): void {
       domains: domains.results,
       health,
       healthChecks,
+      currentDaySchedule,
       sampling: { detected: samplingDetected, maxSampleInterval: totals.maxSampleInterval, uniqueSampleInterval: totals.uniqueSampleInterval, exactQualifiedSessions: !sessionSamplingDetected },
       telemetry: { pipelineVerified: telemetryPipelineVerified, verifiedDays: telemetryVerifiedDays, expectedDays },
       monetization,

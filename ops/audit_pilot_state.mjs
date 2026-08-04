@@ -148,6 +148,12 @@ for (const blocker of overview.reviewBlockers ?? []) {
   if (operationalBlockers.has(blocker)) issues.push(`Evidence gate reports ${blocker}`);
 }
 
+if (!overview.currentDaySchedule) {
+  issues.push("Current-day readiness schedule state is missing from the control-plane overview");
+} else if (!overview.currentDaySchedule.healthy) {
+  issues.push(`Current-day readiness schedule is out of contract: ${overview.currentDaySchedule.observedChecks} observed, ${overview.currentDaySchedule.requiredChecks} required, ${overview.currentDaySchedule.expectedChecks} expected, ${overview.currentDaySchedule.readyChecks} ready`);
+}
+
 const monetization = overview.monetization;
 if (!monetization) {
   issues.push("Monetization state is missing from the control-plane overview");
@@ -181,6 +187,7 @@ const report = {
     reviewBlockers: overview.reviewBlockers,
     totals: overview.totals,
     health: overview.health,
+    currentDaySchedule: overview.currentDaySchedule,
     sampling: overview.sampling,
     telemetry: overview.telemetry,
     monetization: overview.monetization,

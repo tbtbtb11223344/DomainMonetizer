@@ -122,6 +122,7 @@ export interface MetricsOverview {
   domains: DomainMetricSummary[];
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];
+  currentDaySchedule: { date: string; expectedByNowPerDomain: number; requiredByNowPerDomain: number; expectedChecks: number; requiredChecks: number; observedChecks: number; readyChecks: number; healthy: boolean; domains: Array<{ domainId: string; hostname: string; observedChecks: number; readyChecks: number; expectedByNow: number; requiredByNow: number; onSchedule: boolean; healthy: boolean }> };
   sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean };
   telemetry: { pipelineVerified: boolean; verifiedDays: number; expectedDays: number };
   monetization: { activeOffers: number; activeRoutingPolicies: number; clicks: number; conversions: number; postbacks: number };

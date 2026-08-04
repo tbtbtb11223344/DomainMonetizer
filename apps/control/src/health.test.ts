@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkPublishedTenants, HEALTH_CHECK_LIMIT, summarizeTenantHealth } from "./health";
+import { checkPublishedTenants, HEALTH_CHECK_LIMIT, scheduledHealthSlots, summarizeCurrentDaySchedule, summarizeTenantHealth } from "./health";
 
 interface CapturedStatement {
   sql: string;
@@ -30,6 +30,36 @@ function fakeDatabase(domains: unknown[]) {
 }
 
 describe("tenant health checks", () => {
+  it("tracks due health slots with a ten-minute scheduler grace", () => {
+    expect(scheduledHealthSlots(new Date("2026-08-05T00:46:59.000Z"), "2026-08-05")).toEqual({ expectedByNow: 0, requiredByNow: 0 });
+    expect(scheduledHealthSlots(new Date("2026-08-05T00:50:00.000Z"), "2026-08-05")).toEqual({ expectedByNow: 1, requiredByNow: 0 });
+    expect(scheduledHealthSlots(new Date("2026-08-05T00:57:00.000Z"), "2026-08-05")).toEqual({ expectedByNow: 1, requiredByNow: 1 });
+    expect(scheduledHealthSlots(new Date("2026-08-05T06:56:59.000Z"), "2026-08-05")).toEqual({ expectedByNow: 2, requiredByNow: 1 });
+    expect(scheduledHealthSlots(new Date("2026-08-04T23:59:00.000Z"), "2026-08-05")).toEqual({ expectedByNow: 0, requiredByNow: 0 });
+  });
+
+  it("detects missing, duplicate, and failing current-day scheduled checks", () => {
+    const domains = ["ready", "missing", "duplicate", "failed"].map((name) => ({
+      domain_id: `dom_${name}`,
+      hostname: `${name}.example`,
+      lifecycle_status: "published",
+      active_release_id: `rel_${name}`,
+    }));
+    const scheduled = [
+      { domain_id: "dom_ready", scheduled_checks: 1, ready_scheduled_checks: 1 },
+      { domain_id: "dom_missing", scheduled_checks: 0, ready_scheduled_checks: 0 },
+      { domain_id: "dom_duplicate", scheduled_checks: 2, ready_scheduled_checks: 2 },
+      { domain_id: "dom_failed", scheduled_checks: 1, ready_scheduled_checks: 0 },
+    ];
+    const result = summarizeCurrentDaySchedule(domains, scheduled, new Date("2026-08-05T01:00:00.000Z"), "2026-08-05");
+
+    expect(result).toMatchObject({ expectedByNowPerDomain: 1, requiredByNowPerDomain: 1, expectedChecks: 4, requiredChecks: 4, observedChecks: 4, readyChecks: 3, healthy: false });
+    expect(result.domains.find((domain) => domain.hostname === "ready.example")).toMatchObject({ onSchedule: true, healthy: true });
+    expect(result.domains.find((domain) => domain.hostname === "missing.example")).toMatchObject({ onSchedule: false, healthy: false });
+    expect(result.domains.find((domain) => domain.hostname === "duplicate.example")).toMatchObject({ onSchedule: false, healthy: false });
+    expect(result.domains.find((domain) => domain.hostname === "failed.example")).toMatchObject({ onSchedule: true, healthy: false });
+  });
+
   it("requires fresh checks and exact release alignment for portfolio readiness", () => {
     const domains = [
       { domain_id: "dom_ready", hostname: "ready.example", lifecycle_status: "published", active_release_id: "rel_ready" },
