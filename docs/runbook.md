@@ -50,7 +50,7 @@ python ops/collect_pilot_evidence.py `
 
 ## Analytics rollup
 
-The scheduled Worker rolls up the previous completed UTC day at `04:17 UTC`. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
+The scheduled Worker runs at `04:17 UTC`. It compares D1 with every completed UTC day from `TELEMETRY_MIN_DATE`, then rolls up the oldest five missing dates. Normal operation processes one day; the bounded replay automatically repairs gaps without exceeding the Free-plan subrequest budget. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
 
 An authenticated operator can safely re-run a completed date. The operation is idempotent for metric rows and creates an audit record:
 
@@ -59,7 +59,7 @@ $headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Clien
 Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/rollup -Headers $headers -Body '{"date":"2026-08-05"}'
 ```
 
-Review `/api/metrics/overview` or the admin inspector after the run. A failed or missing rollup is an operational defect; do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
+Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
 
 ## Emergency rollback
 

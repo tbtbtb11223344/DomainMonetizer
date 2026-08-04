@@ -50,6 +50,8 @@ Telemetry v2 records no raw IP address. A 30-minute first-party random ID is has
 
 Each completed UTC day is rolled into D1 with sampling-aware Analytics Engine SQL. The control plane stores all views, likely-human views, bot and unknown views, anonymous qualified sessions, human engagement, US likely-human views, clicks, country summaries, and the outcome of every rollup run.
 
+The scheduled rollup is self-healing. It compares successful runs with the actual latest completed UTC day and replays up to five oldest missing days per invocation. A rerun resets the date's prior traffic fields and replaces its country rows before applying the fresh result, so an empty or corrected Analytics query cannot leave stale evidence behind. Conversion and revenue columns remain independent for the later economic ledger.
+
 The admin exposes an evidence status, not an automatic expansion command:
 
 - `collecting`: fewer than 14 complete clean UTC days;

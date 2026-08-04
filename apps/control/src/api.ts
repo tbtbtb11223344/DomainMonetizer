@@ -16,7 +16,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
-import { rollupDate } from "./metrics";
+import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
 type App = Hono<{ Bindings: Env; Variables: Variables }>;
@@ -149,13 +149,14 @@ export function mountApi(app: App): void {
       ).bind(telemetryStartDate).all(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
     ]);
-    const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=?").bind(telemetryStartDate).first<{ metric_date: string | null; successful_days: number }>();
+    const coverageNow = new Date();
+    const latestCompletedDate = latestCompletedUtcDate(coverageNow);
+    const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?").bind(telemetryStartDate, latestCompletedDate).first<{ metric_date: string | null; successful_days: number }>();
     const through = coverage?.metric_date ?? null;
-    const expectedDays = through
-      ? Math.max(0, Math.floor((Date.parse(`${through}T00:00:00.000Z`) - Date.parse(`${telemetryStartDate}T00:00:00.000Z`)) / 86_400_000) + 1)
-      : 0;
     const observedFullDays = Number(coverage?.successful_days ?? 0);
-    const rollupCoverageComplete = expectedDays === observedFullDays;
+    const coverageTarget = rollupCoverageTarget(telemetryStartDate, observedFullDays, through, coverageNow);
+    const expectedDays = coverageTarget.expectedFullDays;
+    const rollupCoverageComplete = coverageTarget.complete;
     const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number }>((sum, row) => {
       const value = row as Record<string, unknown>;
       sum.likelyHumanViews += Number(value.likely_human_views ?? 0);
@@ -170,6 +171,7 @@ export function mountApi(app: App): void {
         : "review_ready";
     return c.json({
       telemetryStartDate,
+      latestCompletedDate,
       rollupThrough: through,
       observedFullDays,
       expectedFullDays: expectedDays,

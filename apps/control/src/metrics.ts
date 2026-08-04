@@ -41,12 +41,70 @@ export interface RollupResult {
   countryRows: number;
 }
 
+export interface RollupBatchResult {
+  plannedDates: string[];
+  results: RollupResult[];
+  failures: Array<{ metricDate: string; message: string }>;
+}
+
+const AUTOMATIC_ROLLUP_LIMIT = 5;
+
 function utcDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
 function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && utcDate(new Date(`${value}T00:00:00.000Z`)) === value;
+}
+
+export function latestCompletedUtcDate(now = new Date()): string {
+  const completed = new Date(now);
+  completed.setUTCHours(0, 0, 0, 0);
+  completed.setUTCDate(completed.getUTCDate() - 1);
+  return utcDate(completed);
+}
+
+export function completedUtcDayCount(startDate: string, now = new Date()): number {
+  if (!validDate(startDate)) throw new Error("Invalid telemetry start date");
+  const latest = latestCompletedUtcDate(now);
+  if (latest < startDate) return 0;
+  return Math.floor((Date.parse(`${latest}T00:00:00.000Z`) - Date.parse(`${startDate}T00:00:00.000Z`)) / 86_400_000) + 1;
+}
+
+export function rollupCoverageTarget(
+  startDate: string,
+  observedFullDays: number,
+  rollupThrough: string | null,
+  now = new Date(),
+): { latestCompletedDate: string; expectedFullDays: number; complete: boolean } {
+  const latestCompletedDate = latestCompletedUtcDate(now);
+  const expectedFullDays = completedUtcDayCount(startDate, now);
+  return {
+    latestCompletedDate,
+    expectedFullDays,
+    complete: expectedFullDays === observedFullDays && (expectedFullDays === 0 || rollupThrough === latestCompletedDate),
+  };
+}
+
+export function missingCompletedUtcDates(
+  startDate: string,
+  successfulDates: Iterable<string>,
+  now = new Date(),
+  limit = AUTOMATIC_ROLLUP_LIMIT,
+): string[] {
+  if (!validDate(startDate)) throw new Error("Invalid telemetry start date");
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("Invalid analytics backfill limit");
+  const latest = latestCompletedUtcDate(now);
+  if (latest < startDate) return [];
+  const successful = new Set(successfulDates);
+  const missing: string[] = [];
+  const cursor = new Date(`${startDate}T00:00:00.000Z`);
+  while (utcDate(cursor) <= latest && missing.length < limit) {
+    const date = utcDate(cursor);
+    if (!successful.has(date)) missing.push(date);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return missing;
 }
 
 function sqlString(value: string): string {
@@ -117,7 +175,11 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
     ]);
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
     const timestamp = nowIso();
-    const statements: D1PreparedStatement[] = [];
+    const statements: D1PreparedStatement[] = [
+      env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, telemetry_version=2, updated_at=? WHERE metric_date=?")
+        .bind(timestamp, metricDate),
+      env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
+    ];
     for (const row of metricRows) {
       statements.push(
         env.DB.prepare("INSERT INTO daily_domain_metrics (domain_id, metric_date, views, engaged_visits, likely_human_views, clicks, conversions, revenue_usd, bot_views, unknown_views, human_engaged_visits, us_likely_human_views, unique_visitors, telemetry_version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 2, ?) ON CONFLICT(domain_id, metric_date) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, likely_human_views=excluded.likely_human_views, clicks=excluded.clicks, bot_views=excluded.bot_views, unknown_views=excluded.unknown_views, human_engaged_visits=excluded.human_engaged_visits, us_likely_human_views=excluded.us_likely_human_views, unique_visitors=excluded.unique_visitors, telemetry_version=excluded.telemetry_version, updated_at=excluded.updated_at")
@@ -144,7 +206,7 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
           .bind(row.domain_id, row.metric_date, country, integer(row.views), integer(row.likely_human_views), integer(row.human_engaged_visits), timestamp),
       );
     }
-    if (statements.length) await env.DB.batch(statements);
+    await env.DB.batch(statements);
     await finish("succeeded", metricRows.length, countryRows.length);
     return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length };
   } catch (error) {
@@ -154,9 +216,31 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
   }
 }
 
-export async function rollupYesterday(env: Env): Promise<RollupResult> {
-  const end = new Date();
-  end.setUTCHours(0, 0, 0, 0);
-  const start = new Date(end.getTime() - 86_400_000);
-  return rollupDate(env, utcDate(start));
+export async function rollupMissingCompletedDates(
+  env: Env,
+  now = new Date(),
+  limit = AUTOMATIC_ROLLUP_LIMIT,
+): Promise<RollupBatchResult> {
+  const latest = latestCompletedUtcDate(now);
+  const startDate = env.TELEMETRY_MIN_DATE?.trim() || latest;
+  if (!validDate(startDate)) throw new Error("Invalid telemetry minimum date");
+  if (latest < startDate) return { plannedDates: [], results: [], failures: [] };
+
+  const successful = await env.DB.prepare(
+    "SELECT DISTINCT metric_date FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?",
+  ).bind(startDate, latest).all<{ metric_date: string }>();
+  const plannedDates = missingCompletedUtcDates(startDate, successful.results.map((row) => row.metric_date), now, limit);
+  const results: RollupResult[] = [];
+  const failures: RollupBatchResult["failures"] = [];
+  for (const metricDate of plannedDates) {
+    try {
+      results.push(await rollupDate(env, metricDate));
+    } catch (error) {
+      failures.push({
+        metricDate,
+        message: (error instanceof Error ? error.message : "Unknown analytics rollup failure").slice(0, 500),
+      });
+    }
+  }
+  return { plannedDates, results, failures };
 }

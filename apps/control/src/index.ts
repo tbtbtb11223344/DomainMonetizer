@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { requireAdmin, requireSameOrigin } from "./auth";
 import { mountApi, mountInternal, mountRunner } from "./api";
-import { rollupYesterday } from "./metrics";
+import { rollupMissingCompletedDates } from "./metrics";
 import type { Env, Variables } from "./types";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -72,10 +72,16 @@ app.onError((error, c) => {
 
 export default {
   fetch: app.fetch,
-  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+  scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(
-      rollupYesterday(env).catch((error: unknown) => {
+      rollupMissingCompletedDates(env, new Date(controller.scheduledTime)).then((batch) => {
+        if (batch.failures.length) {
+          throw new Error(`Analytics rollup failed: ${batch.failures.map((failure) => `${failure.metricDate} (${failure.message})`).join(", ")}`);
+        }
+        console.log(JSON.stringify({ level: "info", task: "analytics_rollup", ...batch }));
+      }).catch((error: unknown) => {
         console.error(JSON.stringify({ level: "error", task: "analytics_rollup", message: error instanceof Error ? error.message : "Unknown error" }));
+        throw error;
       }),
     );
   },

@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { analyticsData, rollupDate } from "./metrics";
+import { analyticsData, completedUtcDayCount, latestCompletedUtcDate, missingCompletedUtcDates, rollupCoverageTarget, rollupDate, rollupMissingCompletedDates } from "./metrics";
 
 interface CapturedStatement {
   sql: string;
   args: unknown[];
   run: () => Promise<{ meta: { changes: number } }>;
+  all: <T>() => Promise<{ results: T[] }>;
 }
 
-function fakeDatabase() {
+function fakeDatabase(queryResults: unknown[] = []) {
   const statements: CapturedStatement[] = [];
   const batches: CapturedStatement[][] = [];
   const db = {
@@ -18,6 +19,7 @@ function fakeDatabase() {
             sql,
             args,
             run: async () => ({ meta: { changes: 1 } }),
+            all: async <T>() => ({ results: queryResults as T[] }),
           };
           statements.push(statement);
           return statement;
@@ -56,6 +58,39 @@ afterEach(() => {
 });
 
 describe("analytics rollups", () => {
+  it("measures coverage against the actual latest completed UTC day", () => {
+    const now = new Date("2026-08-10T12:00:00.000Z");
+    expect(latestCompletedUtcDate(now)).toBe("2026-08-09");
+    expect(completedUtcDayCount("2026-08-05", now)).toBe(5);
+    expect(completedUtcDayCount("2026-08-11", now)).toBe(0);
+    expect(rollupCoverageTarget("2026-08-05", 4, "2026-08-08", now)).toEqual({
+      latestCompletedDate: "2026-08-09",
+      expectedFullDays: 5,
+      complete: false,
+    });
+    expect(rollupCoverageTarget("2026-08-05", 5, "2026-08-09", now).complete).toBe(true);
+  });
+
+  it("plans the oldest missing completed dates and bounds automatic recovery", () => {
+    const now = new Date("2026-08-12T04:17:00.000Z");
+    const successful = ["2026-08-05", "2026-08-07", "2026-08-10"];
+    expect(missingCompletedUtcDates("2026-08-05", successful, now, 3)).toEqual(["2026-08-06", "2026-08-08", "2026-08-09"]);
+    expect(missingCompletedUtcDates("2026-08-12", [], now)).toEqual([]);
+  });
+
+  it("automatically replays a missing completed day after an earlier success", async () => {
+    const { db } = fakeDatabase([{ metric_date: "2026-08-05" }]);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [] }), { headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const batch = await rollupMissingCompletedDates(environment(db), new Date("2026-08-07T04:17:00.000Z"));
+
+    expect(batch.plannedDates).toEqual(["2026-08-06"]);
+    expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0 }]);
+    expect(batch.failures).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("parses the SQL API envelope and rejects the old assumed array shape", () => {
     expect(analyticsData<{ value: number }>({ data: [{ value: 3 }] })).toEqual([{ value: 3 }]);
     expect(() => analyticsData([{ value: 3 }])).toThrow("data array");
@@ -98,10 +133,25 @@ describe("analytics rollups", () => {
     expect(queryBodies.filter((body) => body.includes("_sample_interval"))).toHaveLength(2);
     expect(batches).toHaveLength(1);
     const batch = batches[0]!;
-    expect(batch).toHaveLength(2);
-    const domain = batch[0]!;
+    expect(batch).toHaveLength(4);
+    expect(batch[0]!.sql).toContain("UPDATE daily_domain_metrics SET views=0");
+    expect(batch[1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
+    const domain = batch[2]!;
     expect(domain.sql).toContain("unique_visitors");
     expect(domain.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 12, 7, 3, 2, 5, 6]));
-    expect(batch[1]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
+    expect(batch[3]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
+  });
+
+  it("clears stale traffic and country rows even when a rerun is empty", async () => {
+    const { db, batches } = fakeDatabase();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { headers: { "Content-Type": "application/json" } })));
+
+    const result = await rollupDate(environment(db), "2026-08-05");
+
+    expect(result).toMatchObject({ skipped: false, domainRows: 0, countryRows: 0 });
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(2);
+    expect(batches[0]![0]!.sql).toContain("SET views=0");
+    expect(batches[0]![1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
   });
 });

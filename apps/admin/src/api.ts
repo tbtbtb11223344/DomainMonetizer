@@ -66,6 +66,7 @@ export interface DomainMetricSummary {
 
 export interface MetricsOverview {
   telemetryStartDate: string;
+  latestCompletedDate: string;
   rollupThrough: string | null;
   observedFullDays: number;
   expectedFullDays: number;
