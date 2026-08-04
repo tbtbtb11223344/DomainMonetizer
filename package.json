@@ -13,6 +13,7 @@
     "dev:site": "pnpm --filter @domain-monetizer/site-edge dev",
     "preview:pilots": "node --experimental-strip-types ops/render_pilot_previews.mjs",
     "audit:cloudflare-costs": "node ops/audit_cloudflare_costs.mjs",
+    "audit:pilot": "node ops/audit_pilot_state.mjs",
     "runner:codex": "node ops/run_codex_jobs.mjs --once",
     "test": "vitest run",
     "test:watch": "vitest",
