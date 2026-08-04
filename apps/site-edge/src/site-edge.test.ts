@@ -219,7 +219,7 @@ describe("site edge", () => {
 
   it("serves safe legacy paths and records only coarse entry context", async () => {
     const { env, events } = environment();
-    const response = await worker.fetch(new Request("https://pilot-example.com/services/repair?customer=private", {
+    const request = new Request("https://pilot-example.com/services/repair?customer=private", {
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Referer: "https://www.google.com/search?q=repair",
@@ -228,13 +228,17 @@ describe("site edge", () => {
         "Sec-Fetch-Mode": "navigate",
         "User-Agent": "Mozilla/5.0 (iPhone) AppleWebKit/537.36 Mobile Safari/537.36",
       },
-    }), env as never);
+    });
+    Object.defineProperty(request, "cf", { value: { country: "US", regionCode: "TX", timezone: "America/Chicago" } });
+    const response = await worker.fetch(request, env as never);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
     expect(await response.text()).toContain("independent referral website");
     const point = events[0] as { blobs: string[] };
     expect(point.blobs.slice(10, 13)).toEqual(["service", "mobile", "search"]);
+    expect(point.blobs[13]).toBe("TX");
+    expect(point.blobs[14]).toMatch(/^(?:00-03|04-07|08-11|12-15|16-19|20-23)$/);
     expect(point.blobs.join(" ")).not.toContain("customer=private");
     expect(point.blobs.join(" ")).not.toContain("google.com");
   });

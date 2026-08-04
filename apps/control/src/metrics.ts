@@ -73,6 +73,16 @@ interface IntentRow {
   max_sample_interval: string | number;
 }
 
+interface ContextRow {
+  domain_id: string;
+  metric_date: string;
+  region_code: string;
+  local_time_bucket: string;
+  views: string | number;
+  likely_human_views: string | number;
+  max_sample_interval: string | number;
+}
+
 export interface RollupResult {
   skipped: boolean;
   metricDate: string;
@@ -219,20 +229,22 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
     const canariesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS observed_canaries, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1, metric_date`;
     const intentSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob11 AS path_class, blob12 AS device_class, blob13 AS referrer_class, sum(_sample_interval * double1) AS views, sumIf(_sample_interval * double1, blob4 = 'human') AS likely_human_views, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' GROUP BY index1, metric_date, path_class, device_class, referrer_class`;
-    const [metricRows, uniqueRows, countryRows, sourceRows, canaryRows, intentRows] = await Promise.all([
+    const contextSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob14 AS region_code, blob15 AS local_time_bucket, sum(_sample_interval * double1) AS views, sumIf(_sample_interval * double1, blob4 = 'human') AS likely_human_views, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' GROUP BY index1, metric_date, region_code, local_time_bucket`;
+    const [metricRows, uniqueRows, countryRows, sourceRows, canaryRows, intentRows, contextRows] = await Promise.all([
       queryAnalytics<MetricRow>(env, metricsSql),
       queryAnalytics<UniqueRow>(env, uniquesSql),
       queryAnalytics<CountryRow>(env, countriesSql),
       queryAnalytics<SourceRow>(env, sourcesSql),
       queryAnalytics<CanaryRow>(env, canariesSql),
       queryAnalytics<IntentRow>(env, intentSql),
+      queryAnalytics<ContextRow>(env, contextSql),
     ]);
     const expectedRows = await env.DB.prepare(
       "SELECT d.id AS domain_id,COUNT(h.id) AS expected_canaries FROM domains d LEFT JOIN tenant_health_checks h ON h.domain_id=d.id AND h.check_source='scheduled' AND h.checked_at>=? AND h.checked_at<? WHERE d.lifecycle_status='published' GROUP BY d.id",
     ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
     const sampleByDomain = new Map<string, number>();
-    for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows, ...intentRows]) {
+    for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows, ...intentRows, ...contextRows]) {
       const key = `${row.domain_id}:${row.metric_date}`;
       sampleByDomain.set(key, Math.max(sampleByDomain.get(key) ?? 1, integer(row.max_sample_interval) || 1));
     }
@@ -258,6 +270,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_telemetry_health WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_intent_metrics WHERE metric_date=?").bind(metricDate),
+      env.DB.prepare("DELETE FROM daily_domain_context_metrics WHERE metric_date=?").bind(metricDate),
     ];
     for (const row of metricRows) {
       statements.push(
@@ -317,6 +330,15 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       statements.push(
         env.DB.prepare("INSERT INTO daily_domain_intent_metrics (domain_id,metric_date,path_class,device_class,referrer_class,views,likely_human_views,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(domain_id,metric_date,path_class,device_class,referrer_class) DO UPDATE SET views=excluded.views,likely_human_views=excluded.likely_human_views,updated_at=excluded.updated_at")
           .bind(row.domain_id, row.metric_date, pathClass, deviceClass, referrerClass, integer(row.views), integer(row.likely_human_views), timestamp),
+      );
+    }
+    const timeBuckets = new Set(["00-03", "04-07", "08-11", "12-15", "16-19", "20-23", "unknown"]);
+    for (const row of contextRows) {
+      const regionCode = /^[A-Z]{2}$/.test(row.region_code) ? row.region_code : "XX";
+      const localTimeBucket = timeBuckets.has(row.local_time_bucket) ? row.local_time_bucket : "unknown";
+      statements.push(
+        env.DB.prepare("INSERT INTO daily_domain_context_metrics (domain_id,metric_date,region_code,local_time_bucket,views,likely_human_views,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(domain_id,metric_date,region_code,local_time_bucket) DO UPDATE SET views=excluded.views,likely_human_views=excluded.likely_human_views,updated_at=excluded.updated_at")
+          .bind(row.domain_id, row.metric_date, regionCode, localTimeBucket, integer(row.views), integer(row.likely_human_views), timestamp),
       );
     }
     await env.DB.batch(statements);

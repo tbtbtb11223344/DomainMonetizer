@@ -25,6 +25,8 @@ interface Env {
 
 interface CfProperties {
   country?: string;
+  regionCode?: string;
+  timezone?: string;
   colo?: string;
   asn?: number;
   asOrganization?: string;
@@ -125,6 +127,25 @@ function classifyReferrer(request: Request, hostname: string): ReferrerClass {
   }
 }
 
+function coarseRegion(request: Request): string {
+  const cf = request.cf as CfProperties | undefined;
+  const region = cf?.regionCode?.toUpperCase() ?? "";
+  return cf?.country === "US" && /^[A-Z]{2}$/.test(region) ? region : "XX";
+}
+
+function localTimeBucket(request: Request): string {
+  const timezone = (request.cf as CfProperties | undefined)?.timezone;
+  if (!timezone) return "unknown";
+  try {
+    const hour = Number(new Intl.DateTimeFormat("en-US", { hour: "2-digit", hourCycle: "h23", timeZone: timezone }).format(new Date()));
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) return "unknown";
+    const start = Math.floor(hour / 4) * 4;
+    return `${String(start).padStart(2, "0")}-${String(start + 3).padStart(2, "0")}`;
+  } catch {
+    return "unknown";
+  }
+}
+
 function eventPoint(
   request: Request,
   snapshot: ReleaseSnapshot,
@@ -149,6 +170,8 @@ function eventPoint(
       classifyPath(new URL(request.url).pathname),
       classifyDevice(request),
       classifyReferrer(request, snapshot.hostname),
+      coarseRegion(request),
+      localTimeBucket(request),
     ],
     doubles: [1, classification.botScore ?? -1],
   };

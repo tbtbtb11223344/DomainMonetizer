@@ -88,7 +88,7 @@ describe("analytics rollups", () => {
     expect(batch.plannedDates).toEqual(["2026-08-06"]);
     expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0, sourceRows: 0, canaryRows: 0, expectedCanaries: 0, observedCanaries: 0, canarySampleInterval: 1, telemetryVerified: false, maxSampleInterval: 1, uniqueSampleInterval: 1 }]);
     expect(batch.failures).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
   });
 
   it("parses the SQL API envelope and rejects the old assumed array shape", () => {
@@ -130,6 +130,7 @@ describe("analytics rollups", () => {
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "5", engaged_visits: "2", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", path_class: "service", device_class: "mobile", referrer_class: "search", views: "4", likely_human_views: "3", max_sample_interval: "1" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", region_code: "TX", local_time_bucket: "08-11", views: "4", likely_human_views: "3", max_sample_interval: "1" }] },
     ];
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const payload = responses.shift();
@@ -142,29 +143,32 @@ describe("analytics rollups", () => {
     const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1, canaryRows: 1, expectedCanaries: 4, observedCanaries: 4, canarySampleInterval: 1, telemetryVerified: true, maxSampleInterval: 1, uniqueSampleInterval: 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
-    expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(6);
+    expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
     expect(queryBodies.filter((body) => body.includes("sumIf") && body.includes("blob1 IN"))).toHaveLength(3);
     expect(batches).toHaveLength(1);
     const batch = batches[0]!;
-    expect(batch).toHaveLength(10);
+    expect(batch).toHaveLength(12);
     expect(batch[0]!.sql).toContain("UPDATE daily_domain_metrics SET views=0");
     expect(batch[1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
     expect(batch[2]!.sql).toContain("DELETE FROM daily_domain_source_metrics");
     expect(batch[3]!.sql).toContain("DELETE FROM daily_domain_telemetry_health");
     expect(batch[4]!.sql).toContain("DELETE FROM daily_domain_intent_metrics");
-    const domain = batch[5]!;
+    expect(batch[5]!.sql).toContain("DELETE FROM daily_domain_context_metrics");
+    const domain = batch[6]!;
     expect(domain.sql).toContain("unique_visitors");
     expect(domain.sql).toContain("max_sample_interval");
     expect(domain.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 12, 7, 3, 2, 5, 6]));
-    expect(batch[6]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
-    expect(batch[7]!.args).toEqual(expect.arrayContaining(["human", "browser_navigation", "US", 7922, "Comcast Cable", 5, 2]));
-    expect(batch[8]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 4, 4, 1, 1]));
-    expect(batch[9]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", "service", "mobile", "search", 4, 3]));
+    expect(batch[7]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
+    expect(batch[8]!.args).toEqual(expect.arrayContaining(["human", "browser_navigation", "US", 7922, "Comcast Cable", 5, 2]));
+    expect(batch[9]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 4, 4, 1, 1]));
+    expect(batch[10]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", "service", "mobile", "search", 4, 3]));
+    expect(batch[11]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", "TX", "08-11", 4, 3]));
   });
 
   it("clears stale traffic and country rows even when a rerun is empty", async () => {
@@ -175,12 +179,13 @@ describe("analytics rollups", () => {
 
     expect(result).toMatchObject({ skipped: false, domainRows: 0, countryRows: 0, sourceRows: 0 });
     expect(batches).toHaveLength(1);
-    expect(batches[0]).toHaveLength(5);
+    expect(batches[0]).toHaveLength(6);
     expect(batches[0]![0]!.sql).toContain("SET views=0");
     expect(batches[0]![1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
     expect(batches[0]![2]!.sql).toContain("DELETE FROM daily_domain_source_metrics");
     expect(batches[0]![3]!.sql).toContain("DELETE FROM daily_domain_telemetry_health");
     expect(batches[0]![4]!.sql).toContain("DELETE FROM daily_domain_intent_metrics");
+    expect(batches[0]![5]!.sql).toContain("DELETE FROM daily_domain_context_metrics");
   });
 
   it("persists sampling evidence so distinct sessions cannot silently become decision-grade", async () => {
@@ -191,6 +196,7 @@ describe("analytics rollups", () => {
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "20", likely_human_views: "20", human_engaged_visits: "0", max_sample_interval: "10" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "20", engaged_visits: "0", max_sample_interval: "10" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
+      { data: [] },
       { data: [] },
     ];
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } })));
@@ -214,6 +220,7 @@ describe("analytics rollups", () => {
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "20", engaged_visits: "2", max_sample_interval: "3" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
       { data: [] },
+      { data: [] },
     ];
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } })));
 
@@ -234,6 +241,7 @@ describe("analytics rollups", () => {
       { data: [] },
       { data: [] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "3", max_sample_interval: "1" }] },
+      { data: [] },
       { data: [] },
     ];
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } })));

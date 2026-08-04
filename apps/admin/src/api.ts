@@ -145,6 +145,13 @@ export interface IntentMetric {
   likely_human_views: number;
 }
 
+export interface ContextMetric {
+  region_code: string;
+  local_time_bucket: string;
+  views: number;
+  likely_human_views: number;
+}
+
 export interface DomainDetail {
   domain: DomainSummary;
   contents: VersionSummary[];
@@ -153,6 +160,7 @@ export interface DomainDetail {
   countryMetrics: CountryMetric[];
   sourceMetrics: SourceMetric[];
   intentMetrics: IntentMetric[];
+  contextMetrics: ContextMetric[];
   telemetryHealth: TelemetryHealthDay[];
   healthChecks: TenantHealthCheck[];
 }
