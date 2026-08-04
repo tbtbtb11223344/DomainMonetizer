@@ -60,7 +60,14 @@ app.get("*", async (c) => mutableResponse(await c.env.ASSETS.fetch(c.req.raw)));
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((error, c) => {
   console.error(JSON.stringify({ level: "error", requestId: c.get("requestId"), message: error.message }));
-  return c.json({ error: "Internal server error", requestId: c.get("requestId") }, 500);
+  return c.json(
+    {
+      error: "Internal server error",
+      requestId: c.get("requestId"),
+      ...(c.get("authMethod") === "operator-token" ? { detail: error.message } : {}),
+    },
+    500,
+  );
 });
 
 export default {
