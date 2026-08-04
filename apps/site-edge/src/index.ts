@@ -207,7 +207,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
 
   const headers = new Headers({
     "Content-Type": "text/html; charset=UTF-8",
-    "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+    "Cache-Control": "no-store",
     "ETag": `"${snapshot.releaseId}"`,
     "Vary": "Accept-Encoding",
   });

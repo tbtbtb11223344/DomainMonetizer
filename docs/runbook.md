@@ -9,6 +9,7 @@
 - Publish first, validate through an alternate hostname, then change one domain, verify TLS/DNS/HTTP/telemetry, and only then continue the pilot.
 - Use `preview.multibrands.net` for visual QA. Use `/healthz` only for shared Worker liveness and each apex domain's `/readyz` for tenant readiness. Neither endpoint records a visitor event; do not repeatedly load live apex pages during the measurement window.
 - Root `HEAD` probes do not create page-view events. Browser `GET` requests do.
+- Tenant HTML must return `Cache-Control: no-store` while views are recorded server-side. Public HTML caching is a measurement defect; static `/__dm/` assets remain immutable and cacheable.
 
 ## Commands
 

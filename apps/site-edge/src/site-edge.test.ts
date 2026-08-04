@@ -69,6 +69,7 @@ describe("site edge", () => {
     expect(contentSecurityPolicy).toContain("connect-src 'self'");
     expect(contentSecurityPolicy).toContain("script-src 'self' https://static.cloudflareinsights.com");
     expect(contentSecurityPolicy).not.toContain("*");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     expect(events).toHaveLength(1);
     const point = events[0] as { blobs: string[] };
@@ -112,6 +113,7 @@ describe("site edge", () => {
     const { env, events } = environment();
     const response = await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Set-Cookie")).toBeNull();
     expect(events).toHaveLength(0);
   });
@@ -151,6 +153,15 @@ describe("site edge", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("keeps static assets cacheable while tenant HTML remains uncached", async () => {
+    const { env, events } = environment();
+    const response = await worker.fetch(new Request("https://pilot-example.com/__dm/site-v2.css"), env as never);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=86400, immutable");
+    expect(await response.text()).toBe("asset");
+    expect(events).toHaveLength(0);
+  });
+
   it("classifies automation user agents as bots", async () => {
     const { env, events } = environment();
     await worker.fetch(new Request("https://pilot-example.com/", { headers: { "User-Agent": "Mozilla/5.0 compatible; research-bot/1.0" } }), env as never);
@@ -171,6 +182,7 @@ describe("site edge", () => {
     const response = await worker.fetch(new Request("https://www.pilot-example.com/help?from=www"), env as never);
     expect(response.status).toBe(301);
     expect(response.headers.get("Location")).toBe("https://pilot-example.com/help?from=www");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=3600");
   });
 
   it("does not allow undeclared offer slots", async () => {
