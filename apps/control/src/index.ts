@@ -7,6 +7,14 @@ import type { Env, Variables } from "./types";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+export function mutableResponse(response: Response): Response {
+  return new Response(response.body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
 app.use("*", async (c, next) => {
   const requestId = c.req.header("Cf-Ray") ?? crypto.randomUUID();
   c.set("requestId", requestId);
@@ -47,7 +55,7 @@ app.use("/api/*", requireSameOrigin);
 mountApi(app);
 
 app.use("*", requireAdmin);
-app.get("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+app.get("*", async (c) => mutableResponse(await c.env.ASSETS.fetch(c.req.raw)));
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((error, c) => {
