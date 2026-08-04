@@ -28,6 +28,7 @@ interface OverviewDomainRow extends HealthPortfolioDomain {
   unique_visitors: number | string;
   human_engaged_visits: number | string;
   max_sample_interval: number | string;
+  unique_sample_interval: number | string;
 }
 
 function jsonValue<T>(raw: string, fallback: T): T {
@@ -155,9 +156,9 @@ export function mountApi(app: App): void {
     const coverageNow = new Date();
     const [domains, latestRun, latestHealth] = await Promise.all([
       c.env.DB.prepare(
-        "SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id ORDER BY d.hostname",
+        "SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(m.unique_sample_interval),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id ORDER BY d.hostname",
       ).bind(telemetryStartDate).all<OverviewDomainRow>(),
-      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,max_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
+      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
     ]);
     const latestCompletedDate = latestCompletedUtcDate(coverageNow);
@@ -167,21 +168,23 @@ export function mountApi(app: App): void {
     const coverageTarget = rollupCoverageTarget(telemetryStartDate, observedFullDays, through, coverageNow);
     const expectedDays = coverageTarget.expectedFullDays;
     const rollupCoverageComplete = coverageTarget.complete;
-    const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number }>((sum, row) => {
+    const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {
       sum.likelyHumanViews += Number(row.likely_human_views ?? 0);
       sum.uniqueVisitors += Number(row.unique_visitors ?? 0);
       sum.humanEngagedVisits += Number(row.human_engaged_visits ?? 0);
       sum.maxSampleInterval = Math.max(sum.maxSampleInterval, Number(row.max_sample_interval ?? 1));
+      sum.uniqueSampleInterval = Math.max(sum.uniqueSampleInterval, Number(row.unique_sample_interval ?? 1));
       return sum;
-    }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0, maxSampleInterval: 1 });
+    }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     const samplingDetected = totals.maxSampleInterval > 1;
+    const sessionSamplingDetected = totals.uniqueSampleInterval > 1;
     const { health, healthChecks, allTenantsReady } = summarizeTenantHealth(domains.results, latestHealth.results, coverageNow);
     const decision = decideEvidence({
       observedFullDays,
       minimumReviewDays: 14,
       rollupCoverageComplete,
       allTenantsReady,
-      samplingDetected,
+      sessionSamplingDetected,
       qualifiedSessions: totals.uniqueVisitors,
       minimumQualifiedSessions: 10,
     });
@@ -198,7 +201,7 @@ export function mountApi(app: App): void {
       domains: domains.results,
       health,
       healthChecks,
-      sampling: { detected: samplingDetected, maxSampleInterval: totals.maxSampleInterval, exactQualifiedSessions: !samplingDetected },
+      sampling: { detected: samplingDetected, maxSampleInterval: totals.maxSampleInterval, uniqueSampleInterval: totals.uniqueSampleInterval, exactQualifiedSessions: !sessionSamplingDetected },
       reviewBlockers: decision.blockers,
       latestRun,
     });

@@ -86,7 +86,7 @@ describe("analytics rollups", () => {
     const batch = await rollupMissingCompletedDates(environment(db), new Date("2026-08-07T04:17:00.000Z"));
 
     expect(batch.plannedDates).toEqual(["2026-08-06"]);
-    expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1 }]);
+    expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 }]);
     expect(batch.failures).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -139,7 +139,7 @@ describe("analytics rollups", () => {
 
     const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
-    expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1, maxSampleInterval: 1 });
+    expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
     expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(4);
@@ -185,9 +185,29 @@ describe("analytics rollups", () => {
     const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result.maxSampleInterval).toBe(20);
+    expect(result.uniqueSampleInterval).toBe(20);
     const domainInsert = batches[0]!.find((statement) => statement.sql.startsWith("INSERT INTO daily_domain_metrics"));
-    expect(domainInsert?.args).toContain(20);
+    expect(domainInsert?.args.slice(-3, -1)).toEqual([20, 20]);
     const finish = [...statements].reverse().find((statement) => statement.sql.startsWith("UPDATE analytics_rollup_runs SET"));
-    expect(finish?.args).toContain(20);
+    expect(finish?.args.slice(4, 6)).toEqual([20, 20]);
+  });
+
+  it("keeps exact sessions separate from sampled quality breakdowns", async () => {
+    const { db, statements, batches } = fakeDatabase();
+    const responses = [
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "30", engaged_visits: "3", likely_human_views: "20", bot_views: "5", unknown_views: "5", human_engaged_visits: "2", us_likely_human_views: "12", clicks: "0", max_sample_interval: "3" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "8", max_sample_interval: "1" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "30", likely_human_views: "20", human_engaged_visits: "2", max_sample_interval: "3" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "20", engaged_visits: "2", max_sample_interval: "3" }] },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } })));
+
+    const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
+
+    expect(result).toMatchObject({ maxSampleInterval: 3, uniqueSampleInterval: 1 });
+    const domainInsert = batches[0]!.find((statement) => statement.sql.startsWith("INSERT INTO daily_domain_metrics"));
+    expect(domainInsert?.args.slice(-3, -1)).toEqual([3, 1]);
+    const finish = [...statements].reverse().find((statement) => statement.sql.startsWith("UPDATE analytics_rollup_runs SET"));
+    expect(finish?.args.slice(4, 6)).toEqual([3, 1]);
   });
 });

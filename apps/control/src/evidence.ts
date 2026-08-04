@@ -5,7 +5,7 @@ export interface EvidenceInputs {
   minimumReviewDays: number;
   rollupCoverageComplete: boolean;
   allTenantsReady: boolean;
-  samplingDetected: boolean;
+  sessionSamplingDetected: boolean;
   qualifiedSessions: number;
   minimumQualifiedSessions: number;
 }
@@ -20,7 +20,7 @@ export function decideEvidence(inputs: EvidenceInputs): EvidenceDecision {
     ...(inputs.observedFullDays < inputs.minimumReviewDays ? ["observation_window"] : []),
     ...(!inputs.rollupCoverageComplete ? ["rollup_coverage"] : []),
     ...(!inputs.allTenantsReady ? ["tenant_readiness"] : []),
-    ...(inputs.samplingDetected ? ["analytics_sampling"] : []),
+    ...(inputs.sessionSamplingDetected ? ["qualified_session_sampling"] : []),
     ...(inputs.observedFullDays >= inputs.minimumReviewDays && inputs.qualifiedSessions < inputs.minimumQualifiedSessions ? ["qualified_sessions"] : []),
   ];
   const operationalBlocker = blockers.some((blocker) => blocker !== "qualified_sessions");

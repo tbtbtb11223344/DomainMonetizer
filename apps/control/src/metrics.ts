@@ -57,6 +57,7 @@ export interface RollupResult {
   countryRows: number;
   sourceRows: number;
   maxSampleInterval: number;
+  uniqueSampleInterval: number;
 }
 
 export interface RollupBatchResult {
@@ -162,18 +163,18 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
   await env.DB.prepare("INSERT INTO analytics_rollup_runs (id, metric_date, status, started_at) VALUES (?, ?, 'running', ?)")
     .bind(runId, metricDate, startedAt).run();
 
-  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, sourceRows: number, maxSampleInterval: number, error?: string) => {
-    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, source_rows=?, max_sample_interval=?, error_message=?, completed_at=? WHERE id=?")
-      .bind(status, domainRows, countryRows, sourceRows, maxSampleInterval, error ?? null, nowIso(), runId).run();
+  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, sourceRows: number, maxSampleInterval: number, uniqueSampleInterval: number, error?: string) => {
+    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, source_rows=?, max_sample_interval=?, unique_sample_interval=?, error_message=?, completed_at=? WHERE id=?")
+      .bind(status, domainRows, countryRows, sourceRows, maxSampleInterval, uniqueSampleInterval, error ?? null, nowIso(), runId).run();
   };
 
   if (!env.CLOUDFLARE_ACCOUNT_ID || !env.ANALYTICS_READ_TOKEN) {
-    await finish("skipped", 0, 0, 0, 1, "Analytics credentials are not configured");
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1 };
+    await finish("skipped", 0, 0, 0, 1, 1, "Analytics credentials are not configured");
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 };
   }
   if (env.TELEMETRY_MIN_DATE && metricDate < env.TELEMETRY_MIN_DATE) {
-    await finish("skipped", 0, 0, 0, 1, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1 };
+    await finish("skipped", 0, 0, 0, 1, 1, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 };
   }
 
   const start = `${metricDate} 00:00:00`;
@@ -200,17 +201,19 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       const key = `${row.domain_id}:${row.metric_date}`;
       sampleByDomain.set(key, Math.max(sampleByDomain.get(key) ?? 1, integer(row.max_sample_interval) || 1));
     }
+    const uniqueSampleByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.max_sample_interval) || 1]));
     const maxSampleInterval = Math.max(1, ...sampleByDomain.values());
+    const uniqueSampleInterval = Math.max(1, ...uniqueSampleByDomain.values());
     const timestamp = nowIso();
     const statements: D1PreparedStatement[] = [
-      env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, max_sample_interval=1, telemetry_version=2, updated_at=? WHERE metric_date=?")
+      env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=2, updated_at=? WHERE metric_date=?")
         .bind(timestamp, metricDate),
       env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
     ];
     for (const row of metricRows) {
       statements.push(
-        env.DB.prepare("INSERT INTO daily_domain_metrics (domain_id, metric_date, views, engaged_visits, likely_human_views, clicks, conversions, revenue_usd, bot_views, unknown_views, human_engaged_visits, us_likely_human_views, unique_visitors, max_sample_interval, telemetry_version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, 2, ?) ON CONFLICT(domain_id, metric_date) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, likely_human_views=excluded.likely_human_views, clicks=excluded.clicks, bot_views=excluded.bot_views, unknown_views=excluded.unknown_views, human_engaged_visits=excluded.human_engaged_visits, us_likely_human_views=excluded.us_likely_human_views, unique_visitors=excluded.unique_visitors, max_sample_interval=excluded.max_sample_interval, telemetry_version=excluded.telemetry_version, updated_at=excluded.updated_at")
+        env.DB.prepare("INSERT INTO daily_domain_metrics (domain_id, metric_date, views, engaged_visits, likely_human_views, clicks, conversions, revenue_usd, bot_views, unknown_views, human_engaged_visits, us_likely_human_views, unique_visitors, max_sample_interval, unique_sample_interval, telemetry_version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, 2, ?) ON CONFLICT(domain_id, metric_date) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, likely_human_views=excluded.likely_human_views, clicks=excluded.clicks, bot_views=excluded.bot_views, unknown_views=excluded.unknown_views, human_engaged_visits=excluded.human_engaged_visits, us_likely_human_views=excluded.us_likely_human_views, unique_visitors=excluded.unique_visitors, max_sample_interval=excluded.max_sample_interval, unique_sample_interval=excluded.unique_sample_interval, telemetry_version=excluded.telemetry_version, updated_at=excluded.updated_at")
           .bind(
             row.domain_id,
             row.metric_date,
@@ -224,6 +227,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
             integer(row.us_likely_human_views),
             uniqueByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 0,
             sampleByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 1,
+            uniqueSampleByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 1,
             timestamp,
           ),
       );
@@ -246,11 +250,11 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       );
     }
     await env.DB.batch(statements);
-    await finish("succeeded", metricRows.length, countryRows.length, sourceRows.length, maxSampleInterval);
-    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length, sourceRows: sourceRows.length, maxSampleInterval };
+    await finish("succeeded", metricRows.length, countryRows.length, sourceRows.length, maxSampleInterval, uniqueSampleInterval);
+    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length, sourceRows: sourceRows.length, maxSampleInterval, uniqueSampleInterval };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown analytics rollup failure";
-    await finish("failed", 0, 0, 0, 1, message.slice(0, 500)).catch(() => undefined);
+    await finish("failed", 0, 0, 0, 1, 1, message.slice(0, 500)).catch(() => undefined);
     throw error;
   }
 }
