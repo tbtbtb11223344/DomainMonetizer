@@ -147,7 +147,7 @@ export function mountApi(app: App): void {
       c.env.DB.prepare(
         "SELECT d.id AS domain_id, d.hostname, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname ORDER BY d.hostname",
       ).bind(telemetryStartDate).all(),
-      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
+      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
     ]);
     const coverageNow = new Date();
     const latestCompletedDate = latestCompletedUtcDate(coverageNow);
@@ -232,7 +232,8 @@ export function mountApi(app: App): void {
     const releases = await c.env.DB.prepare("SELECT id, version, status, created_by, created_at, published_at FROM release_versions WHERE domain_id=? ORDER BY version DESC").bind(domain.id).all();
     const metrics = await c.env.DB.prepare("SELECT * FROM daily_domain_metrics WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
     const countryMetrics = await c.env.DB.prepare("SELECT country,SUM(views) AS views,SUM(likely_human_views) AS likely_human_views,SUM(human_engaged_visits) AS human_engaged_visits FROM daily_domain_country_metrics WHERE domain_id=? GROUP BY country ORDER BY likely_human_views DESC,views DESC LIMIT 10").bind(domain.id).all();
-    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results });
+    const sourceMetrics = await c.env.DB.prepare("SELECT visitor_class,classification_reason,country,asn,as_org,SUM(views) AS views,SUM(engaged_visits) AS engaged_visits FROM daily_domain_source_metrics WHERE domain_id=? AND metric_date>=? GROUP BY visitor_class,classification_reason,country,asn,as_org ORDER BY views DESC,engaged_visits DESC LIMIT 12").bind(domain.id, c.env.TELEMETRY_MIN_DATE ?? "0000-01-01").all();
+    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results, sourceMetrics: sourceMetrics.results });
   });
 
   app.post("/api/domains/:hostname/content", async (c) => {

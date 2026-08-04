@@ -62,6 +62,8 @@ Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/ro
 
 Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
 
+For traffic quality, inspect each domain's `sourceMetrics` in `/api/domains/:hostname` or the **Traffic quality** section in the admin inspector. A browser-navigation classification is evidence, not proof by itself: review its country, ASN organization, engagement, and concentration. Hosting, cloud, research, or unexpected-country networks should be investigated before counting the traffic as commercially useful.
+
 ## Emergency rollback
 
 1. Pause the affected hostname in the admin API.

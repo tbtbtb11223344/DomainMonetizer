@@ -542,6 +542,83 @@ td small {
   line-height: 1.55;
 }
 
+.quality {
+  padding: 27px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.quality-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 17px;
+}
+
+.quality-head h3 {
+  margin: 0;
+}
+
+.quality-head > span {
+  color: var(--muted);
+  font: 500 10px "DM Mono";
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.quality ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.quality li {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.quality li > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.quality li strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.quality li p,
+.quality-empty {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-class {
+  flex: none;
+  padding: 5px 7px;
+  background: #f0eee9;
+  color: #676e6a;
+  font: 500 9px "DM Mono";
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.source-class.human {
+  background: #e7f4e9;
+  color: #267340;
+}
+
+.source-class.bot {
+  background: #ffebe6;
+  color: #a23c28;
+}
+
 .checks,
 .versions {
   padding: 27px 0;

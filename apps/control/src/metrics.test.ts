@@ -86,9 +86,9 @@ describe("analytics rollups", () => {
     const batch = await rollupMissingCompletedDates(environment(db), new Date("2026-08-07T04:17:00.000Z"));
 
     expect(batch.plannedDates).toEqual(["2026-08-06"]);
-    expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0 }]);
+    expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0, sourceRows: 0 }]);
     expect(batch.failures).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("parses the SQL API envelope and rejects the old assumed array shape", () => {
@@ -116,6 +116,7 @@ describe("analytics rollups", () => {
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "12", engaged_visits: "4", likely_human_views: "7", bot_views: "3", unknown_views: "2", human_engaged_visits: "3", us_likely_human_views: "5", clicks: "0" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "6" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "8", likely_human_views: "5", human_engaged_visits: "2" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "5", engaged_visits: "2" }] },
     ];
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const payload = responses.shift();
@@ -127,19 +128,22 @@ describe("analytics rollups", () => {
 
     const result = await rollupDate(environment(db), "2026-08-05");
 
-    expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
-    expect(queryBodies.filter((body) => body.includes("_sample_interval"))).toHaveLength(2);
+    expect(queryBodies.filter((body) => body.includes("_sample_interval"))).toHaveLength(3);
+    expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
     expect(batches).toHaveLength(1);
     const batch = batches[0]!;
-    expect(batch).toHaveLength(4);
+    expect(batch).toHaveLength(6);
     expect(batch[0]!.sql).toContain("UPDATE daily_domain_metrics SET views=0");
     expect(batch[1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
-    const domain = batch[2]!;
+    expect(batch[2]!.sql).toContain("DELETE FROM daily_domain_source_metrics");
+    const domain = batch[3]!;
     expect(domain.sql).toContain("unique_visitors");
     expect(domain.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 12, 7, 3, 2, 5, 6]));
-    expect(batch[3]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
+    expect(batch[4]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
+    expect(batch[5]!.args).toEqual(expect.arrayContaining(["human", "browser_navigation", "US", 7922, "Comcast Cable", 5, 2]));
   });
 
   it("clears stale traffic and country rows even when a rerun is empty", async () => {
@@ -148,10 +152,11 @@ describe("analytics rollups", () => {
 
     const result = await rollupDate(environment(db), "2026-08-05");
 
-    expect(result).toMatchObject({ skipped: false, domainRows: 0, countryRows: 0 });
+    expect(result).toMatchObject({ skipped: false, domainRows: 0, countryRows: 0, sourceRows: 0 });
     expect(batches).toHaveLength(1);
-    expect(batches[0]).toHaveLength(2);
+    expect(batches[0]).toHaveLength(3);
     expect(batches[0]![0]!.sql).toContain("SET views=0");
     expect(batches[0]![1]!.sql).toContain("DELETE FROM daily_domain_country_metrics");
+    expect(batches[0]![2]!.sql).toContain("DELETE FROM daily_domain_source_metrics");
   });
 });

@@ -48,6 +48,16 @@ export interface CountryMetric {
   human_engaged_visits: number;
 }
 
+export interface SourceMetric {
+  visitor_class: "human" | "bot" | "unknown";
+  classification_reason: string;
+  country: string;
+  asn: number;
+  as_org: string;
+  views: number;
+  engaged_visits: number;
+}
+
 export interface DomainMetricSummary {
   domain_id: string;
   hostname: string;
@@ -84,6 +94,7 @@ export interface DomainDetail {
   releases: VersionSummary[];
   metrics: MetricDay[];
   countryMetrics: CountryMetric[];
+  sourceMetrics: SourceMetric[];
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {

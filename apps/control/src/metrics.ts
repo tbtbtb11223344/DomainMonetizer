@@ -34,11 +34,24 @@ interface CountryRow {
   human_engaged_visits: string | number;
 }
 
+interface SourceRow {
+  domain_id: string;
+  metric_date: string;
+  visitor_class: string;
+  classification_reason: string;
+  country: string;
+  asn: string | number;
+  as_org: string;
+  views: string | number;
+  engaged_visits: string | number;
+}
+
 export interface RollupResult {
   skipped: boolean;
   metricDate: string;
   domainRows: number;
   countryRows: number;
+  sourceRows: number;
 }
 
 export interface RollupBatchResult {
@@ -143,18 +156,18 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
   await env.DB.prepare("INSERT INTO analytics_rollup_runs (id, metric_date, status, started_at) VALUES (?, ?, 'running', ?)")
     .bind(runId, metricDate, startedAt).run();
 
-  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, error?: string) => {
-    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, error_message=?, completed_at=? WHERE id=?")
-      .bind(status, domainRows, countryRows, error ?? null, nowIso(), runId).run();
+  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, sourceRows: number, error?: string) => {
+    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, source_rows=?, error_message=?, completed_at=? WHERE id=?")
+      .bind(status, domainRows, countryRows, sourceRows, error ?? null, nowIso(), runId).run();
   };
 
   if (!env.CLOUDFLARE_ACCOUNT_ID || !env.ANALYTICS_READ_TOKEN) {
-    await finish("skipped", 0, 0, "Analytics credentials are not configured");
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0 };
+    await finish("skipped", 0, 0, 0, "Analytics credentials are not configured");
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0 };
   }
   if (env.TELEMETRY_MIN_DATE && metricDate < env.TELEMETRY_MIN_DATE) {
-    await finish("skipped", 0, 0, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0 };
+    await finish("skipped", 0, 0, 0, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0 };
   }
 
   const start = `${metricDate} 00:00:00`;
@@ -168,10 +181,12 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
     const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks FROM ${env.ANALYTICS_DATASET} WHERE ${where} GROUP BY index1, metric_date`;
     const uniquesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`;
     const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits FROM ${env.ANALYTICS_DATASET} WHERE ${where} GROUP BY index1, metric_date, country`;
-    const [metricRows, uniqueRows, countryRows] = await Promise.all([
+    const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
+    const [metricRows, uniqueRows, countryRows, sourceRows] = await Promise.all([
       queryAnalytics<MetricRow>(env, metricsSql),
       queryAnalytics<UniqueRow>(env, uniquesSql),
       queryAnalytics<CountryRow>(env, countriesSql),
+      queryAnalytics<SourceRow>(env, sourcesSql),
     ]);
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
     const timestamp = nowIso();
@@ -179,6 +194,7 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
       env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, telemetry_version=2, updated_at=? WHERE metric_date=?")
         .bind(timestamp, metricDate),
       env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
+      env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
     ];
     for (const row of metricRows) {
       statements.push(
@@ -206,12 +222,22 @@ export async function rollupDate(env: Env, metricDate: string): Promise<RollupRe
           .bind(row.domain_id, row.metric_date, country, integer(row.views), integer(row.likely_human_views), integer(row.human_engaged_visits), timestamp),
       );
     }
+    for (const row of sourceRows) {
+      const visitorClass = row.visitor_class === "human" || row.visitor_class === "bot" ? row.visitor_class : "unknown";
+      const reason = /^[a-z0-9_]{1,50}$/.test(row.classification_reason) ? row.classification_reason : "unrecognized";
+      const country = /^[A-Z]{2}$/.test(row.country) ? row.country : "XX";
+      const asOrg = String(row.as_org ?? "").slice(0, 100);
+      statements.push(
+        env.DB.prepare("INSERT INTO daily_domain_source_metrics (domain_id, metric_date, visitor_class, classification_reason, country, asn, as_org, views, engaged_visits, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(domain_id, metric_date, visitor_class, classification_reason, country, asn, as_org) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, updated_at=excluded.updated_at")
+          .bind(row.domain_id, row.metric_date, visitorClass, reason, country, integer(row.asn), asOrg, integer(row.views), integer(row.engaged_visits), timestamp),
+      );
+    }
     await env.DB.batch(statements);
-    await finish("succeeded", metricRows.length, countryRows.length);
-    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length };
+    await finish("succeeded", metricRows.length, countryRows.length, sourceRows.length);
+    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length, sourceRows: sourceRows.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown analytics rollup failure";
-    await finish("failed", 0, 0, message.slice(0, 500)).catch(() => undefined);
+    await finish("failed", 0, 0, 0, message.slice(0, 500)).catch(() => undefined);
     throw error;
   }
 }
