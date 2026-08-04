@@ -21,12 +21,11 @@ describe("control response handling", () => {
   it("preserves immutable caching for fingerprinted static assets", async () => {
     const source = new Response("compiled asset", {
       headers: {
-        "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Type": "text/javascript",
       },
     });
 
-    const copied = mutableResponse(source);
+    const copied = mutableResponse(source, "/assets/app.123.js");
 
     expect(copied.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     expect(await copied.text()).toBe("compiled asset");

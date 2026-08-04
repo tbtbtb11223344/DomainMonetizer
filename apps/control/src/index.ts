@@ -9,7 +9,7 @@ import type { Env, Variables } from "./types";
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 const HEALTH_CRON = "47 */6 * * *";
 
-export function mutableResponse(response: Response): Response {
+export function mutableResponse(response: Response, requestPath = ""): Response {
   const copy = new Response(response.body, {
     headers: response.headers,
     status: response.status,
@@ -17,6 +17,8 @@ export function mutableResponse(response: Response): Response {
   });
   if (copy.headers.get("Content-Type")?.toLowerCase().includes("text/html")) {
     copy.headers.set("Cache-Control", "no-store");
+  } else if (requestPath.startsWith("/assets/") || requestPath.startsWith("/__dm/")) {
+    copy.headers.set("Cache-Control", "public, max-age=31536000, immutable");
   }
   return copy;
 }
@@ -61,7 +63,7 @@ app.use("/api/*", requireSameOrigin);
 mountApi(app);
 
 app.use("*", requireAdmin);
-app.get("*", async (c) => mutableResponse(await c.env.ASSETS.fetch(c.req.raw)));
+app.get("*", async (c) => mutableResponse(await c.env.ASSETS.fetch(c.req.raw), c.req.path));
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 app.onError((error, c) => {
