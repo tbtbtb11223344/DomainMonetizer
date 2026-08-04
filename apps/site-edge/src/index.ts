@@ -127,9 +127,12 @@ async function pageVisitor(request: Request, env: Env): Promise<{ hash: string; 
 async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<Response> {
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST" } });
   if ((request.headers.get("content-type") ?? "").split(";", 1)[0] !== "application/json") return new Response(null, { status: 415 });
+  if (request.headers.get("origin") !== `https://${snapshot.hostname}`) return withHeaders(new Response(null, { status: 403 }));
+  const hashedVisitor = await visitorHash(request, env);
+  if (!hashedVisitor) return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
   const body: { releaseId?: string } = await request.json<{ releaseId?: string }>().catch(() => ({}));
   if (body.releaseId !== snapshot.releaseId) return new Response(null, { status: 409 });
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classifyVisitor(request, true), await visitorHash(request, env)));
+  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classifyVisitor(request, true), hashedVisitor));
   return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
 }
 

@@ -51,7 +51,7 @@ python ops/collect_pilot_evidence.py `
 
 ## Scheduled evidence and readiness
 
-The analytics rollup runs at `04:17 UTC`. It compares D1 with every completed UTC day from `TELEMETRY_MIN_DATE`, then rolls up the oldest five missing dates. Normal operation processes one day; the bounded replay automatically repairs gaps without exceeding the Free-plan subrequest budget. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
+The analytics rollup runs at `04:17 UTC`. It compares D1 with every completed UTC day from `TELEMETRY_MIN_DATE`, then rolls up the oldest five missing dates. Normal operation processes one day; the bounded replay automatically repairs gaps without exceeding the Free-plan subrequest budget. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded. Every rollup stores the maximum `_sample_interval` seen across its totals, unique-session, country, and source queries. Any value above one blocks scale review because distinct qualified-session counts are no longer exact.
 
 Tenant readiness runs at `00:47`, `06:47`, `12:47`, and `18:47 UTC`. It checks up to 20 published domains through their public `/readyz` endpoint, requires the exact active release ID, and stores 90 days of results. The pilot must never exceed 20 published domains without replacing this bounded monitor with queued or cursor-batched work. A check is fresh for eight hours; stale, unchecked, unreachable, non-200, or release-mismatched tenants block scale review.
 
@@ -69,7 +69,7 @@ $headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Clien
 Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/rollup -Headers $headers -Body '{"date":"2026-08-05"}'
 ```
 
-Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
+Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Confirm `sampling.detected=false` before treating qualified sessions as exact. Do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
 
 For traffic quality, inspect each domain's `sourceMetrics` in `/api/domains/:hostname` or the **Traffic quality** section in the admin inspector. A browser-navigation classification is evidence, not proof by itself: review its country, ASN organization, engagement, and concentration. Hosting, cloud, research, or unexpected-country networks should be investigated before counting the traffic as commercially useful.
 

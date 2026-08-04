@@ -99,6 +99,7 @@ describe("site edge", () => {
       headers: {
         "Content-Type": "application/json",
         Cookie: `dm_vid=${cookie}`,
+        Origin: "https://pilot-example.com",
         "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
       },
       body: JSON.stringify({ releaseId: "rel_test" }),
@@ -107,6 +108,27 @@ describe("site edge", () => {
     const engagementPoint = events[1] as { blobs: string[] };
     expect(engagementPoint.blobs[3]).toBe("human");
     expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
+  });
+
+  it("ignores engagement without the issued session and rejects cross-origin beacons", async () => {
+    const { env, events } = environment();
+    const request = (origin: string, cookie?: string) => new Request("https://pilot-example.com/events/engaged", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { Cookie: `dm_vid=${cookie}` } : {}),
+        Origin: origin,
+        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+      },
+      body: JSON.stringify({ releaseId: "rel_test" }),
+    });
+
+    const noSession = await worker.fetch(request("https://pilot-example.com"), env as never);
+    const crossOrigin = await worker.fetch(request("https://attacker.example", "a".repeat(32)), env as never);
+
+    expect(noSession.status).toBe(204);
+    expect(crossOrigin.status).toBe(403);
+    expect(events).toHaveLength(0);
   });
 
   it("does not count HEAD probes as page views", async () => {
