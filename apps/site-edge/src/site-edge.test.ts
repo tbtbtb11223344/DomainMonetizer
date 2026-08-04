@@ -64,7 +64,11 @@ describe("site edge", () => {
     const response = await worker.fetch(new Request("https://pilot-example.com/"), env as never);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("independent referral website");
-    expect(response.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+    const contentSecurityPolicy = response.headers.get("Content-Security-Policy");
+    expect(contentSecurityPolicy).toContain("default-src 'none'");
+    expect(contentSecurityPolicy).toContain("connect-src 'self'");
+    expect(contentSecurityPolicy).toContain("script-src 'self' https://static.cloudflareinsights.com");
+    expect(contentSecurityPolicy).not.toContain("*");
     expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     expect(events).toHaveLength(1);
   });

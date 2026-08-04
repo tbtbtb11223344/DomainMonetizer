@@ -28,7 +28,7 @@ interface CfProperties {
 }
 
 const securityHeaders: Record<string, string> = {
-  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self'; upgrade-insecure-requests",
+  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; upgrade-insecure-requests",
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
