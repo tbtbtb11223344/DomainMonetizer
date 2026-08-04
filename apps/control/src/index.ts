@@ -10,11 +10,15 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 const HEALTH_CRON = "47 */6 * * *";
 
 export function mutableResponse(response: Response): Response {
-  return new Response(response.body, {
+  const copy = new Response(response.body, {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
   });
+  if (copy.headers.get("Content-Type")?.toLowerCase().includes("text/html")) {
+    copy.headers.set("Cache-Control", "no-store");
+  }
+  return copy;
 }
 
 app.use("*", async (c, next) => {

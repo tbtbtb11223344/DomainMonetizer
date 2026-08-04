@@ -9,7 +9,7 @@
 - Publish first, validate through an alternate hostname, then change one domain, verify TLS/DNS/HTTP/telemetry, and only then continue the pilot.
 - Use `preview.multibrands.net` for visual QA. Use `/healthz` only for shared Worker liveness and each apex domain's `/readyz` for tenant readiness. Neither endpoint records a visitor event; do not repeatedly load live apex pages during the measurement window.
 - `HEAD` probes do not create page-view events on root or legacy paths. Browser `GET` requests do. Safe legacy paths render the canonical `noindex` guide and contribute only coarse intent classes; sensitive and scanner paths fail closed as `404` without telemetry.
-- Tenant HTML must return `Cache-Control: no-store` while views are recorded server-side. Public HTML caching is a measurement defect; static `/__dm/` assets remain immutable and cacheable.
+- Tenant HTML must return `Cache-Control: no-store` while views are recorded server-side. Public HTML caching is a measurement defect; static `/__dm/` assets remain immutable and cacheable. The protected admin shell is also `no-store`, while its fingerprinted scripts, styles, fonts, and images keep their immutable asset caching so a normal reload follows the deployed Worker version.
 
 ## Commands
 
