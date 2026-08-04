@@ -16,6 +16,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
+import { rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
 type App = Hono<{ Bindings: Env; Variables: Variables }>;
@@ -138,6 +139,66 @@ export function mountApi(app: App): void {
     return c.json({ domains: result.results.map(publicDomain) });
   });
 
+  app.get("/api/metrics/overview", async (c) => {
+    const telemetryStartDate = c.env.TELEMETRY_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.TELEMETRY_MIN_DATE)
+      ? c.env.TELEMETRY_MIN_DATE
+      : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const [domains, latestRun] = await Promise.all([
+      c.env.DB.prepare(
+        "SELECT d.id AS domain_id, d.hostname, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname ORDER BY d.hostname",
+      ).bind(telemetryStartDate).all(),
+      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
+    ]);
+    const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=?").bind(telemetryStartDate).first<{ metric_date: string | null; successful_days: number }>();
+    const through = coverage?.metric_date ?? null;
+    const expectedDays = through
+      ? Math.max(0, Math.floor((Date.parse(`${through}T00:00:00.000Z`) - Date.parse(`${telemetryStartDate}T00:00:00.000Z`)) / 86_400_000) + 1)
+      : 0;
+    const observedFullDays = Number(coverage?.successful_days ?? 0);
+    const rollupCoverageComplete = expectedDays === observedFullDays;
+    const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number }>((sum, row) => {
+      const value = row as Record<string, unknown>;
+      sum.likelyHumanViews += Number(value.likely_human_views ?? 0);
+      sum.uniqueVisitors += Number(value.unique_visitors ?? 0);
+      sum.humanEngagedVisits += Number(value.human_engaged_visits ?? 0);
+      return sum;
+    }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0 });
+    const evidenceStatus = observedFullDays < 14 || !rollupCoverageComplete
+      ? "collecting"
+      : totals.uniqueVisitors < 10
+        ? "insufficient_signal"
+        : "review_ready";
+    return c.json({
+      telemetryStartDate,
+      rollupThrough: through,
+      observedFullDays,
+      expectedFullDays: expectedDays,
+      rollupCoverageComplete,
+      evidenceStatus,
+      minimumReviewDays: 14,
+      totals,
+      domains: domains.results,
+      latestRun,
+    });
+  });
+
+  app.post("/api/metrics/rollup", async (c) => {
+    const parsed = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!parsed.success) return c.json(zodError(parsed.error), 400);
+    const today = new Date().toISOString().slice(0, 10);
+    if (parsed.data.date >= today) return c.json({ error: "Only completed UTC days can be rolled up" }, 409);
+    const result = await rollupDate(c.env, parsed.data.date);
+    await auditStatement(c.env.DB, {
+      actor: c.get("actor"),
+      action: "metrics.rollup",
+      entityType: "analytics",
+      entityId: parsed.data.date,
+      requestId: c.get("requestId"),
+      after: result,
+    }).run();
+    return c.json(result);
+  });
+
   app.post("/api/domains/import", async (c) => {
     const raw = await c.req.json<unknown>().catch(() => null);
     const body = z.object({ domains: z.array(domainImportSchema).min(1).max(500) }).safeParse(raw);
@@ -168,7 +229,8 @@ export function mountApi(app: App): void {
     const contents = await c.env.DB.prepare("SELECT id, version, provenance, status, created_by, created_at, approved_at FROM content_versions WHERE domain_id=? ORDER BY version DESC").bind(domain.id).all();
     const releases = await c.env.DB.prepare("SELECT id, version, status, created_by, created_at, published_at FROM release_versions WHERE domain_id=? ORDER BY version DESC").bind(domain.id).all();
     const metrics = await c.env.DB.prepare("SELECT * FROM daily_domain_metrics WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
-    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results });
+    const countryMetrics = await c.env.DB.prepare("SELECT country,SUM(views) AS views,SUM(likely_human_views) AS likely_human_views,SUM(human_engaged_visits) AS human_engaged_visits FROM daily_domain_country_metrics WHERE domain_id=? GROUP BY country ORDER BY likely_human_views DESC,views DESC LIMIT 10").bind(domain.id).all();
+    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results });
   });
 
   app.post("/api/domains/:hostname/content", async (c) => {

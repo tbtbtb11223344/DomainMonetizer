@@ -24,7 +24,17 @@ interface Env {
 interface CfProperties {
   country?: string;
   colo?: string;
-  botManagement?: { score?: number; verifiedBot?: boolean };
+  asn?: number;
+  asOrganization?: string;
+  botManagement?: { score?: number; verifiedBot?: boolean; jsDetection?: { passed?: boolean } } | null;
+}
+
+type VisitorClass = "human" | "bot" | "unknown";
+
+interface VisitorClassification {
+  visitorClass: VisitorClass;
+  reason: string;
+  botScore: number | null;
 }
 
 const securityHeaders: Record<string, string> = {
@@ -48,24 +58,48 @@ function errorResponse(status: number, title: string): Response {
   return withHeaders(new Response(body, { status, headers: { "Content-Type": "text/html; charset=UTF-8", "Cache-Control": "no-store" } }));
 }
 
-function classifyVisitor(request: Request): "human" | "bot" | "unknown" {
+function classifyVisitor(request: Request, interaction = false): VisitorClassification {
   const cf = request.cf as CfProperties | undefined;
-  if (cf?.botManagement?.verifiedBot) return "bot";
+  if (cf?.botManagement?.verifiedBot) return { visitorClass: "bot", reason: "verified_bot", botScore: cf.botManagement.score ?? null };
   const score = cf?.botManagement?.score;
-  if (typeof score === "number") return score >= 30 ? "human" : "bot";
+  if (typeof score === "number") return { visitorClass: score >= 30 ? "human" : "bot", reason: "bot_score", botScore: score };
   const userAgent = request.headers.get("user-agent")?.toLowerCase() ?? "";
-  if (!userAgent) return "unknown";
-  if (/(bot|crawler|spider|headless|preview|fetch|monitor|scanner|curl|wget)/.test(userAgent)) return "bot";
-  if (/(mozilla|chrome|safari|firefox|edg)\//.test(userAgent)) return "human";
-  return "unknown";
+  if (!userAgent) return { visitorClass: "unknown", reason: "missing_ua", botScore: null };
+  if (/(bot|crawler|spider|headless|preview|fetch|monitor|scanner|curl|wget|python|httpclient|axios|node\.js)/.test(userAgent)) {
+    return { visitorClass: "bot", reason: "ua_automation", botScore: null };
+  }
+  const browserLike = /(mozilla|chrome|safari|firefox|edg)\//.test(userAgent);
+  if (interaction && browserLike) return { visitorClass: "human", reason: "browser_interaction", botScore: null };
+  const navigation = request.headers.get("sec-fetch-mode") === "navigate" && request.headers.get("sec-fetch-dest") === "document";
+  const acceptsHtml = request.headers.get("accept")?.toLowerCase().includes("text/html") ?? false;
+  if (browserLike && navigation && acceptsHtml) return { visitorClass: "human", reason: "browser_navigation", botScore: null };
+  if (browserLike) return { visitorClass: "unknown", reason: "browser_ua_only", botScore: null };
+  return { visitorClass: "unknown", reason: "unrecognized_client", botScore: null };
 }
 
-function eventPoint(request: Request, snapshot: ReleaseSnapshot, kind: string, humanClass: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
+function eventPoint(
+  request: Request,
+  snapshot: ReleaseSnapshot,
+  kind: string,
+  classification: VisitorClassification,
+  visitorIdHash: string | null,
+): { blobs: string[]; doubles: number[]; indexes: string[] } {
   const cf = request.cf as CfProperties | undefined;
   return {
     indexes: [snapshot.domainId],
-    blobs: [kind, snapshot.hostname, snapshot.releaseId, humanClass, cf?.country ?? "XX", cf?.colo ?? "unknown"],
-    doubles: [1],
+    blobs: [
+      kind,
+      snapshot.hostname,
+      snapshot.releaseId,
+      classification.visitorClass,
+      cf?.country ?? "XX",
+      cf?.colo ?? "unknown",
+      visitorIdHash ?? "",
+      classification.reason,
+      typeof cf?.asn === "number" ? String(cf.asn) : "",
+      cf?.asOrganization?.slice(0, 100) ?? "",
+    ],
+    doubles: [1, classification.botScore ?? -1],
   };
 }
 
@@ -84,20 +118,27 @@ async function visitorHash(request: Request, env: Env): Promise<string | null> {
   return cookie ? sha256Hex(`${env.VISITOR_HASH_SALT}:${cookie}`) : null;
 }
 
+async function pageVisitor(request: Request, env: Env): Promise<{ hash: string; cookie: string | null }> {
+  const existing = request.headers.get("cookie")?.match(/(?:^|;\s*)dm_vid=([a-f0-9]{32})/)?.[1];
+  const id = existing ?? crypto.randomUUID().replaceAll("-", "");
+  return { hash: await sha256Hex(`${env.VISITOR_HASH_SALT}:${id}`), cookie: existing ? null : id };
+}
+
 async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<Response> {
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST" } });
   if ((request.headers.get("content-type") ?? "").split(";", 1)[0] !== "application/json") return new Response(null, { status: 415 });
   const body: { releaseId?: string } = await request.json<{ releaseId?: string }>().catch(() => ({}));
   if (body.releaseId !== snapshot.releaseId) return new Response(null, { status: 409 });
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classifyVisitor(request)));
+  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classifyVisitor(request, true), await visitorHash(request, env)));
   return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
 }
 
 async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: string, env: Env): Promise<Response> {
   const declared = snapshot.offerSlots.find((item) => item.slot === slot && item.enabled);
   if (!declared) return errorResponse(404, "Offer unavailable");
-  const humanClass = classifyVisitor(request);
+  const classification = classifyVisitor(request, true);
   const cf = request.cf as CfProperties | undefined;
+  const hashedVisitor = await visitorHash(request, env);
   const internal = await env.CONTROL.fetch("https://control.internal/internal/click", {
     method: "POST",
     headers: {
@@ -108,10 +149,10 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
       domainId: snapshot.domainId,
       releaseId: snapshot.releaseId,
       slot,
-      visitorIdHash: await visitorHash(request, env),
-      likelyHuman: humanClass === "human" ? true : humanClass === "bot" ? false : null,
+      visitorIdHash: hashedVisitor,
+      likelyHuman: classification.visitorClass === "human" ? true : classification.visitorClass === "bot" ? false : null,
       country: cf?.country ?? null,
-      userAgentClass: humanClass,
+      userAgentClass: classification.visitorClass,
     }),
   });
   if (!internal.ok) return errorResponse(503, "Offer temporarily unavailable");
@@ -123,7 +164,7 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
     return errorResponse(503, "Offer temporarily unavailable");
   }
   if (destination.protocol !== "https:") return errorResponse(503, "Offer temporarily unavailable");
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", humanClass));
+  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", classification, hashedVisitor));
   return withHeaders(Response.redirect(destination, 302), { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
 }
 
@@ -154,16 +195,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/sitemap.xml") return withHeaders(new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://${hostname}/</loc></url></urlset>`, { headers: { "Content-Type": "application/xml; charset=UTF-8", "Cache-Control": "public, max-age=3600" } }));
   if (url.pathname !== "/") return errorResponse(404, "Page not found");
 
-  const humanClass = classifyVisitor(request);
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", humanClass));
   const headers = new Headers({
     "Content-Type": "text/html; charset=UTF-8",
     "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
     "ETag": `"${snapshot.releaseId}"`,
     "Vary": "Accept-Encoding",
   });
-  if (!request.headers.get("cookie")?.includes("dm_vid=")) {
-    headers.append("Set-Cookie", `dm_vid=${crypto.randomUUID().replaceAll("-", "")}; Max-Age=1800; Path=/; Secure; HttpOnly; SameSite=Lax`);
+  if (request.method === "GET") {
+    const visitor = await pageVisitor(request, env);
+    env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classifyVisitor(request), visitor.hash));
+    if (visitor.cookie) headers.append("Set-Cookie", `dm_vid=${visitor.cookie}; Max-Age=1800; Path=/; Secure; HttpOnly; SameSite=Lax`);
   }
   return withHeaders(new Response(request.method === "HEAD" ? null : snapshot.html, { headers }));
 }

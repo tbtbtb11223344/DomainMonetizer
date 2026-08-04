@@ -28,11 +28,61 @@ export interface VersionSummary {
   published_at?: string | null;
 }
 
+export interface MetricDay {
+  metric_date: string;
+  views: number;
+  engaged_visits: number;
+  likely_human_views: number;
+  bot_views: number;
+  unknown_views: number;
+  human_engaged_visits: number;
+  us_likely_human_views: number;
+  unique_visitors: number;
+  clicks: number;
+}
+
+export interface CountryMetric {
+  country: string;
+  views: number;
+  likely_human_views: number;
+  human_engaged_visits: number;
+}
+
+export interface DomainMetricSummary {
+  domain_id: string;
+  hostname: string;
+  days_with_traffic: number;
+  first_metric_date: string | null;
+  last_metric_date: string | null;
+  views: number;
+  likely_human_views: number;
+  bot_views: number;
+  unknown_views: number;
+  human_engaged_visits: number;
+  us_likely_human_views: number;
+  unique_visitors: number;
+  clicks: number;
+}
+
+export interface MetricsOverview {
+  telemetryStartDate: string;
+  rollupThrough: string | null;
+  observedFullDays: number;
+  expectedFullDays: number;
+  rollupCoverageComplete: boolean;
+  evidenceStatus: "collecting" | "insufficient_signal" | "review_ready";
+  minimumReviewDays: number;
+  totals: { likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number };
+  domains: DomainMetricSummary[];
+  latestRun: { metric_date: string; status: string; error_message: string | null; completed_at: string | null } | null;
+}
+
 export interface DomainDetail {
   domain: DomainSummary;
   contents: VersionSummary[];
   releases: VersionSummary[];
-  metrics: Array<Record<string, number | string>>;
+  metrics: MetricDay[];
+  countryMetrics: CountryMetric[];
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -52,6 +102,10 @@ export async function listDomains(search = ""): Promise<DomainSummary[]> {
 
 export async function getDomain(hostname: string): Promise<DomainDetail> {
   return request(`/api/domains/${encodeURIComponent(hostname)}`);
+}
+
+export async function getMetricsOverview(): Promise<MetricsOverview> {
+  return request("/api/metrics/overview");
 }
 
 export async function mutate(path: string): Promise<Record<string, unknown>> {

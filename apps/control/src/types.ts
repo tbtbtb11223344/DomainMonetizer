@@ -13,6 +13,7 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   ANALYTICS_READ_TOKEN?: string;
   ANALYTICS_DATASET: string;
+  TELEMETRY_MIN_DATE?: string;
   PREVIEW_HOSTNAME?: string;
 }
 

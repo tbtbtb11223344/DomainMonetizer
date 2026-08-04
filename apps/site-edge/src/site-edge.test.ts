@@ -71,6 +71,57 @@ describe("site edge", () => {
     expect(contentSecurityPolicy).not.toContain("*");
     expect(response.headers.get("Set-Cookie")).toContain("HttpOnly");
     expect(events).toHaveLength(1);
+    const point = events[0] as { blobs: string[] };
+    expect(point.blobs[3]).toBe("unknown");
+    expect(point.blobs[6]).toMatch(/^[a-f0-9]{64}$/);
+    expect(point.blobs[7]).toBe("missing_ua");
+  });
+
+  it("qualifies browser navigations and keeps a stable anonymous session hash", async () => {
+    const { env, events } = environment();
+    const view = await worker.fetch(new Request("https://pilot-example.com/", {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+      },
+    }), env as never);
+    const cookie = view.headers.get("Set-Cookie")?.match(/dm_vid=([a-f0-9]{32})/)?.[1];
+    expect(cookie).toBeTruthy();
+    const viewPoint = events[0] as { blobs: string[] };
+    expect(viewPoint.blobs[3]).toBe("human");
+    expect(viewPoint.blobs[7]).toBe("browser_navigation");
+
+    const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `dm_vid=${cookie}`,
+        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+      },
+      body: JSON.stringify({ releaseId: "rel_test" }),
+    }), env as never);
+    expect(engagement.status).toBe(204);
+    const engagementPoint = events[1] as { blobs: string[] };
+    expect(engagementPoint.blobs[3]).toBe("human");
+    expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
+  });
+
+  it("does not count HEAD probes as page views", async () => {
+    const { env, events } = environment();
+    const response = await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(events).toHaveLength(0);
+  });
+
+  it("classifies automation user agents as bots", async () => {
+    const { env, events } = environment();
+    await worker.fetch(new Request("https://pilot-example.com/", { headers: { "User-Agent": "Mozilla/5.0 compatible; research-bot/1.0" } }), env as never);
+    const point = events[0] as { blobs: string[] };
+    expect(point.blobs[3]).toBe("bot");
+    expect(point.blobs[7]).toBe("ua_automation");
   });
 
   it("fails closed when the hostname has no active release", async () => {

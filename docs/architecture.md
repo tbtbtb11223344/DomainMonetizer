@@ -42,6 +42,22 @@ Rollback only changes the active pointer to an earlier immutable release. Pausin
 - Audit records accompany every mutation.
 - No raw IP addresses are retained. Visitor identifiers are short-lived, first-party random IDs and may be stored only as a one-way hash.
 
+## Measurement and scale gate
+
+The first launch and visual-QA burst is not decision data. `TELEMETRY_MIN_DATE` establishes a clean UTC boundary; earlier Analytics Engine events are retained by Cloudflare but skipped by the D1 rollup. Preview-host traffic is also excluded even though a preview snapshot retains the source domain ID.
+
+Telemetry v2 records no raw IP address. A 30-minute first-party random ID is hashed with a Worker secret before it reaches Analytics Engine. The edge also records country, ASN organization, a conservative visitor class and the reason for that class. Browser-shaped traffic without a real navigation or interaction signal remains `unknown`; verified automation, low Bot Management scores when available, and automation user agents are `bot`. Cloudflare Bot Management is optional and is not required for the current free-plan implementation.
+
+Each completed UTC day is rolled into D1 with sampling-aware Analytics Engine SQL. The control plane stores all views, likely-human views, bot and unknown views, anonymous qualified sessions, human engagement, US likely-human views, clicks, country summaries, and the outcome of every rollup run.
+
+The admin exposes an evidence status, not an automatic expansion command:
+
+- `collecting`: fewer than 14 complete clean UTC days;
+- `insufficient_signal`: at least 14 days but fewer than 10 qualified anonymous sessions across the pilot;
+- `review_ready`: enough traffic evidence for the operator to review quality, geo fit, and system reliability.
+
+`review_ready` can justify discussing a larger traffic pilot. It does not prove monetization economics; that requires the later Marketcall conversion and payout ledger.
+
 Cloudflare Access is the intended interactive-admin boundary. Until the account's Zero Trust Free checkout is completed, the UI fails closed and operational API calls use the separate bearer secret. That temporary path does not expose the control Worker or reuse the public edge secret.
 
 ## Frontend design thesis

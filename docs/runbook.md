@@ -7,6 +7,8 @@
 - Portfolio nameserver changes are exact-list operations after preview and rollback verification.
 - A pilot domain must be `parking` + `available`, have no `Traffic2` label at action time, and pass a final registrar/API readback immediately before mutation.
 - Publish first, validate through an alternate hostname, then change one domain, verify TLS/DNS/HTTP/telemetry, and only then continue the pilot.
+- Use `preview.multibrands.net` for visual QA and `/healthz` for routine uptime checks. Do not repeatedly load live apex pages during the measurement window.
+- Root `HEAD` probes do not create page-view events. Browser `GET` requests do.
 
 ## Commands
 
@@ -45,6 +47,19 @@ python ops/collect_pilot_evidence.py `
 ```
 
 `preview.multibrands.net` is a seven-day KV alias of one approved release. It is not a portfolio record and must never be imported into the domains table. Publishing a preview does not change the selected domain's DNS.
+
+## Analytics rollup
+
+The scheduled Worker rolls up the previous completed UTC day at `04:17 UTC`. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
+
+An authenticated operator can safely re-run a completed date. The operation is idempotent for metric rows and creates an audit record:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Client-Id" = $env:CF_ACCESS_CLIENT_ID; "CF-Access-Client-Secret" = $env:CF_ACCESS_CLIENT_SECRET; "Content-Type" = "application/json" }
+Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/rollup -Headers $headers -Body '{"date":"2026-08-05"}'
+```
+
+Review `/api/metrics/overview` or the admin inspector after the run. A failed or missing rollup is an operational defect; do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
 
 ## Emergency rollback
 
