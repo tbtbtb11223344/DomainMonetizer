@@ -14,6 +14,7 @@
     "preview:pilots": "node --experimental-strip-types ops/render_pilot_previews.mjs",
     "audit:cloudflare-costs": "node ops/audit_cloudflare_costs.mjs",
     "audit:pilot": "node ops/audit_pilot_state.mjs",
+    "audit:sources": "node ops/audit_pilot_sources.mjs",
     "runner:codex": "node ops/run_codex_jobs.mjs --once",
     "test": "vitest run",
     "test:watch": "vitest",
