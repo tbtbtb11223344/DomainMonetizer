@@ -43,4 +43,3 @@
     if (window.scrollY > window.innerHeight * 0.5) send();
   }, { passive: true, once: true });
 })();
-
