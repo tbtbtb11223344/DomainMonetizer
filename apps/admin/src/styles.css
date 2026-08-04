@@ -175,6 +175,13 @@ input {
   margin-top: 8px;
 }
 
+.summary .summary-wide strong {
+  max-width: 220px;
+  font-size: 17px;
+  line-height: 1.25;
+  text-align: right;
+}
+
 .error {
   background: #fff3df;
   border-left: 3px solid #d57d17;
@@ -838,6 +845,148 @@ td small.tenant-state.issue {
   font-size: 14px;
   max-width: 280px;
   line-height: 1.6;
+}
+
+.ledger-view {
+  min-height: calc(100vh - 176px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.ledger-toolbar {
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.ledger-toolbar h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.ledger-toolbar p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ledger-toolbar button {
+  min-width: 150px;
+  min-height: 44px;
+  border: 1px solid #bfc1bc;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ledger-toolbar button:hover,
+.ledger-toolbar button:focus-visible {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.ledger-toolbar button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.ledger-toolbar button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.ledger-table {
+  position: relative;
+  min-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.ledger-table table {
+  table-layout: auto;
+}
+
+.ledger-table th {
+  width: auto !important;
+}
+
+.ledger-table th:nth-child(1) {
+  width: 28% !important;
+}
+
+.ledger-table th:nth-child(2) {
+  width: 25% !important;
+}
+
+.ledger-table th:nth-child(3),
+.ledger-table th:nth-child(4) {
+  width: 13% !important;
+}
+
+.ledger-table th:nth-child(5) {
+  width: 21% !important;
+}
+
+.ledger-table th:last-child,
+.ledger-table td:last-child {
+  padding-right: 24px;
+  padding-left: 24px;
+  text-align: left;
+}
+
+.ledger-table tr {
+  cursor: default;
+}
+
+.ledger-table td {
+  height: 88px;
+}
+
+.ledger-table tbody tr:hover td {
+  background: #f5f4f0;
+}
+
+.ledger-table td:nth-child(4) {
+  font-family: "DM Mono";
+}
+
+.mono-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px "DM Mono";
+  color: var(--muted);
+}
+
+.ledger-error {
+  color: #a23c28;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.status.job-succeeded {
+  background: #dff4e4;
+  color: #16723a;
+}
+
+.status.job-running {
+  background: #e2e8ff;
+  color: #2448bd;
+}
+
+.status.job-queued {
+  background: #fff0d3;
+  color: #9a5b11;
+}
+
+.status.job-failed {
+  background: #ffebe6;
+  color: #a23c28;
 }
 
 @keyframes loading {

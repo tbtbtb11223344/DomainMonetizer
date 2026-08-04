@@ -35,7 +35,9 @@ Each scheduled readiness request carries a deterministic health-check ID and an 
 5. Atomically switch `site:{hostname}:active` to the release ID.
 6. Record the deployment and audit event.
 
-Rollback only changes the active pointer to an earlier immutable release. Pausing changes the pointer to an explicit paused snapshot; a missing or malformed snapshot fails closed.
+Publish, pause, and rollback switch the runtime pointer before committing the corresponding D1 status, deployment, and audit records. If that D1 batch fails, the control plane automatically restores the previous pointer (or removes the first-publication pointer) before returning the error. A failed initial pointer write never mutates D1. This bounded compensation keeps KV runtime truth and D1 control state aligned without introducing a queue or a multi-day workflow. Readiness monitoring remains the backstop for the rare case where both a D1 commit and its pointer compensation fail.
+
+Rollback changes the active pointer to an earlier immutable release. Pausing changes the pointer to an explicit paused snapshot; a missing or malformed snapshot fails closed.
 
 ## Security boundaries
 
@@ -76,6 +78,6 @@ Cloudflare Access is the interactive-admin boundary. The Zero Trust Free organiz
 
 ## Frontend design thesis
 
-The admin is a quiet control room: warm off-white surfaces, graphite typography, one electric-cobalt action color, dense operational tables, and a single side inspector instead of a dashboard full of cards.
+The admin is a quiet control room: warm off-white surfaces, graphite typography, one electric-cobalt action color, dense operational tables, and a single side inspector instead of a dashboard full of cards. Portfolio is the primary working surface. Jobs is a read-only ledger for the constrained content runner, and Audit exposes authenticated control-plane mutations without returning stored before/after payloads. Publish, pause, and rollback require an explicit browser confirmation because they change the live runtime; checks, previews, and draft generation do not.
 
 The initial public template is an independent local-service guide: editorial home/craft imagery, warm stone colors, one amber call-to-action, strong service hierarchy, and a visible independent-referral disclosure. The page has one primary action and no fake reviews, fake local office, or impersonation cues.

@@ -165,6 +165,27 @@ export interface DomainDetail {
   healthChecks: TenantHealthCheck[];
 }
 
+export interface JobSummary {
+  id: string;
+  job_type: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  attempts: number;
+  error_message: string | null;
+  hostname: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  actor: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  request_id: string | null;
+  occurred_at: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -186,6 +207,16 @@ export async function getDomain(hostname: string): Promise<DomainDetail> {
 
 export async function getMetricsOverview(): Promise<MetricsOverview> {
   return request("/api/metrics/overview");
+}
+
+export async function listJobs(): Promise<JobSummary[]> {
+  const result = await request<{ jobs: JobSummary[] }>("/api/jobs");
+  return result.jobs;
+}
+
+export async function listAuditEvents(): Promise<AuditEvent[]> {
+  const result = await request<{ events: AuditEvent[] }>("/api/audit");
+  return result.events;
 }
 
 export async function mutate(path: string): Promise<Record<string, unknown>> {

@@ -1,7 +1,14 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { getDomain, getMetricsOverview, listDomains, mutate, type DomainDetail, type DomainSummary, type MetricsOverview } from "./api";
+import { getDomain, getMetricsOverview, listAuditEvents, listDomains, listJobs, mutate, type AuditEvent, type DomainDetail, type DomainSummary, type JobSummary, type MetricsOverview } from "./api";
 import "./styles.css";
+
+type View = "portfolio" | "jobs" | "audit";
+
+function initialView(): View {
+  const hash = window.location.hash.slice(1);
+  return hash === "jobs" || hash === "audit" ? hash : "portfolio";
+}
 
 const statusLabels: Record<DomainSummary["lifecycleStatus"], string> = {
   draft: "Draft",
@@ -39,12 +46,16 @@ function formatTimeBucket(value: string): string {
 }
 
 function App() {
+  const [view, setView] = useState<View>(initialView);
   const [domains, setDomains] = useState<DomainSummary[]>([]);
+  const [jobs, setJobs] = useState<JobSummary[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<DomainDetail | null>(null);
   const [overview, setOverview] = useState<MetricsOverview | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [auxiliaryLoading, setAuxiliaryLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,6 +94,23 @@ function App() {
 
   useEffect(() => { void refresh(); }, [search]);
   useEffect(() => { void refreshDetail(); }, [refreshDetail]);
+  useEffect(() => {
+    const syncViewFromHash = () => setView(initialView());
+    window.addEventListener("hashchange", syncViewFromHash);
+    return () => window.removeEventListener("hashchange", syncViewFromHash);
+  }, []);
+  useEffect(() => {
+    if (view === "portfolio") return;
+    setAuxiliaryLoading(true);
+    const pending = view === "jobs" ? listJobs() : listAuditEvents();
+    void pending.then((result) => {
+      if (view === "jobs") setJobs(result as JobSummary[]);
+      else setAuditEvents(result as AuditEvent[]);
+      setError(null);
+    }).catch((caught: unknown) => {
+      setError(caught instanceof Error ? caught.message : `Could not load ${view}`);
+    }).finally(() => setAuxiliaryLoading(false));
+  }, [view]);
 
   const totals = useMemo(() => ({
     live: domains.filter((domain) => domain.lifecycleStatus === "published").length,
@@ -92,8 +120,28 @@ function App() {
 
   const metricByDomain = useMemo(() => new Map(overview?.domains.map((metric) => [metric.domain_id, metric]) ?? []), [overview]);
   const healthByDomain = useMemo(() => new Map(overview?.healthChecks.map((check) => [check.domainId, check]) ?? []), [overview]);
+  const jobTotals = useMemo(() => ({
+    queued: jobs.filter((job) => job.status === "queued").length,
+    running: jobs.filter((job) => job.status === "running").length,
+    failed: jobs.filter((job) => job.status === "failed").length,
+  }), [jobs]);
+  const pageTitle = view === "portfolio" ? "Portfolio control" : view === "jobs" ? "Generation jobs" : "Audit trail";
 
-  const action = async (path: string) => {
+  const reloadAuxiliary = async () => {
+    setAuxiliaryLoading(true);
+    try {
+      if (view === "jobs") setJobs(await listJobs());
+      if (view === "audit") setAuditEvents(await listAuditEvents());
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : `Could not load ${view}`);
+    } finally {
+      setAuxiliaryLoading(false);
+    }
+  };
+
+  const action = async (path: string, confirmation?: string) => {
+    if (confirmation && !window.confirm(confirmation)) return;
     setBusy(true);
     try {
       await mutate(path);
@@ -130,19 +178,22 @@ function App() {
     <aside className="rail">
       <div className="mark">DM</div>
       <nav aria-label="Primary">
-        <a className="active" href="#portfolio"><span>01</span> Portfolio</a>
-        <a href="#jobs"><span>02</span> Jobs</a>
-        <a href="#audit"><span>03</span> Audit</a>
+        <a className={view === "portfolio" ? "active" : ""} href="#portfolio" onClick={() => setView("portfolio")}><span>01</span> Portfolio</a>
+        <a className={view === "jobs" ? "active" : ""} href="#jobs" onClick={() => setView("jobs")}><span>02</span> Jobs</a>
+        <a className={view === "audit" ? "active" : ""} href="#audit" onClick={() => setView("audit")}><span>03</span> Audit</a>
       </nav>
       <div className="rail-foot"><span className="pulse" /> Control plane</div>
     </aside>
-    <main className="workspace" id="portfolio">
+    <main className="workspace" id={view}>
       <header className="topbar">
-        <div><p className="kicker">DomainMonetizer</p><h1>Portfolio control</h1></div>
-        <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}/{overview?.health.ready ?? "—"}</strong><span>live / ready</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.observedFullDays ?? 0}</strong><span>clean days</span></div></div>
+        <div><p className="kicker">DomainMonetizer / {view}</p><h1>{pageTitle}</h1></div>
+        {view === "portfolio" && <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}/{overview?.health.ready ?? "—"}</strong><span>live / ready</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.observedFullDays ?? 0}</strong><span>clean days</span></div></div>}
+        {view === "jobs" && <div className="summary"><div><strong>{jobs.length}</strong><span>recent jobs</span></div><div><strong>{jobTotals.queued}</strong><span>queued</span></div><div><strong>{jobTotals.running}</strong><span>running</span></div><div><strong>{jobTotals.failed}</strong><span>failed</span></div></div>}
+        {view === "audit" && <div className="summary"><div><strong>{auditEvents.length}</strong><span>recent events</span></div><div className="summary-wide"><strong>{auditEvents[0] ? formatTimestamp(auditEvents[0].occurred_at) : "—"}</strong><span>latest mutation</span></div></div>}
       </header>
 
       {error && <div className="error" role="alert"><span>Attention</span>{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
+      {view === "portfolio" && <>
       {overview?.latestRun?.status === "failed" && <div className="error" role="alert"><span>Telemetry</span>Latest daily rollup failed for {overview.latestRun.metric_date}: {overview.latestRun.error_message ?? "No diagnostic was recorded."}</div>}
       {overview && overview.latestRun?.status !== "failed" && !overview.rollupCoverageComplete && <div className="error" role="alert"><span>Telemetry</span>Coverage is incomplete: {overview.observedFullDays} of {overview.expectedFullDays} completed UTC days are stored. Automatic recovery is pending through {overview.latestCompletedDate}.</div>}
       {overview && !overview.sampling.exactQualifiedSessions && <div className="error" role="alert"><span>Exactness</span>The qualified-session query was sampled at ×{overview.sampling.uniqueSampleInterval}. Session counts are not exact, so scale review is blocked.</div>}
@@ -192,13 +243,24 @@ function App() {
             <div className="actions">
               {!detail?.contents.length && <button disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/generate`)}>Generate draft</button>}
               {latestDraft && <><a className="button secondary" target="_blank" rel="noreferrer" href={`/api/content/${encodeURIComponent(latestDraft.id)}/preview`}>Preview draft</a><button disabled={busy} onClick={() => void action(`/api/content/${encodeURIComponent(latestDraft.id)}/approve`)}>Approve draft</button></>}
-              {detail?.contents.some((content) => content.status === "approved") && <button disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/publish`)}>{current.lifecycleStatus === "published" ? "Publish new release" : "Publish domain"}</button>}
-              {current.lifecycleStatus === "published" && <button className="secondary" disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/pause`)}>Pause domain</button>}
-              {detail?.releases.filter((release) => release.id !== current.activeReleaseId).slice(0, 1).map((release) => <button key={release.id} className="text-button" disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/rollback/${encodeURIComponent(release.id)}`)}>Roll back to release v{release.version}</button>)}
+              {detail?.contents.some((content) => content.status === "approved") && <button disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/publish`, `Publish the approved content to ${current.hostname}? This changes the live release.`)}>{current.lifecycleStatus === "published" ? "Publish new release" : "Publish domain"}</button>}
+              {current.lifecycleStatus === "published" && <button className="secondary" disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/pause`, `Pause ${current.hostname}? Visitors will receive a temporary-unavailable response until another release is published or restored.`)}>Pause domain</button>}
+              {detail?.releases.filter((release) => release.id !== current.activeReleaseId).slice(0, 1).map((release) => <button key={release.id} className="text-button" disabled={busy} onClick={() => void action(`/api/domains/${encodeURIComponent(current.hostname)}/rollback/${encodeURIComponent(release.id)}`, `Roll back ${current.hostname} to release v${release.version}? This changes the live release.`)}>Roll back to release v{release.version}</button>)}
             </div>
           </> : <div className="inspector-empty"><span>↗</span><h2>Select a domain</h2><p>Review source evidence, content state, and publication controls.</p></div>}
         </aside>
       </div>
+      </>}
+
+      {view === "jobs" && <section className="ledger-view" aria-busy={auxiliaryLoading}>
+        <div className="ledger-toolbar"><div><h2>Content generation queue</h2><p>Schema-constrained Codex drafts remain manual-review only.</p></div><button disabled={auxiliaryLoading} onClick={() => void reloadAuxiliary()}>Refresh jobs</button></div>
+        <div className="ledger-table"><table><thead><tr><th>Domain</th><th>Job</th><th>Status</th><th>Attempts</th><th>Updated</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.id}><td><strong>{job.hostname ?? "Domain unavailable"}</strong><small>{job.id}</small></td><td>{formatReason(job.job_type)}{job.error_message && <small className="ledger-error">{job.error_message}</small>}</td><td><span className={`status job-${job.status}`}>{job.status}</span></td><td>{formatNumber(job.attempts)}</td><td>{formatTimestamp(job.updated_at)}</td></tr>)}</tbody></table>{!auxiliaryLoading && !jobs.length && <div className="empty"><p>No generation jobs yet.</p><span>Approved pilot content was imported directly; queued Codex work will appear here.</span></div>}{auxiliaryLoading && <div className="loading-line" />}</div>
+      </section>}
+
+      {view === "audit" && <section className="ledger-view" aria-busy={auxiliaryLoading}>
+        <div className="ledger-toolbar"><div><h2>Control-plane mutations</h2><p>Authenticated changes, publication decisions, and operator checks.</p></div><button disabled={auxiliaryLoading} onClick={() => void reloadAuxiliary()}>Refresh audit</button></div>
+        <div className="ledger-table"><table><thead><tr><th>Action</th><th>Entity</th><th>Actor</th><th>Request</th><th>Occurred</th></tr></thead><tbody>{auditEvents.map((event) => <tr key={event.id}><td><strong>{formatReason(event.action)}</strong><small>{event.id}</small></td><td>{event.entity_type}<small>{event.entity_id}</small></td><td>{event.actor}</td><td className="mono-cell">{event.request_id ?? "—"}</td><td>{formatTimestamp(event.occurred_at)}</td></tr>)}</tbody></table>{!auxiliaryLoading && !auditEvents.length && <div className="empty"><p>No audit events recorded.</p><span>Authenticated mutations will appear here.</span></div>}{auxiliaryLoading && <div className="loading-line" />}</div>
+      </section>}
     </main>
   </div>;
 }

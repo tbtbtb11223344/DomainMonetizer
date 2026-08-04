@@ -70,6 +70,35 @@ async function domainById(db: D1Database, id: string): Promise<DomainRow | null>
   return db.prepare("SELECT * FROM domains WHERE id = ?").bind(id).first<DomainRow>();
 }
 
+export async function switchActivePointer(
+  kv: KVNamespace,
+  hostname: string,
+  nextReleaseId: string,
+  previousReleaseId: string | null,
+  commit: () => Promise<unknown>,
+): Promise<void> {
+  const pointerKey = activePointerKey(hostname);
+  await kv.put(pointerKey, nextReleaseId);
+  try {
+    await commit();
+  } catch (error) {
+    try {
+      if (previousReleaseId) await kv.put(pointerKey, previousReleaseId);
+      else await kv.delete(pointerKey);
+    } catch (recoveryError) {
+      console.error(JSON.stringify({
+        level: "error",
+        task: "active_pointer_recovery",
+        hostname,
+        nextReleaseId,
+        previousReleaseId,
+        message: recoveryError instanceof Error ? recoveryError.message : "Unknown pointer recovery error",
+      }));
+    }
+    throw error;
+  }
+}
+
 function zodError(error: z.ZodError): Record<string, unknown> {
   return { error: "Validation failed", issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) };
 }
@@ -124,15 +153,14 @@ async function persistPublishedRelease(
     .bind(snapshot.releaseId, domain.id, releaseVersion, contentRow.id, serialized, checksum, actor, timestamp)
     .run();
   await env.SITE_CONFIG.put(releaseKey(snapshot.releaseId), serialized);
-  await env.DB.batch([
+  await switchActivePointer(env.SITE_CONFIG, domain.hostname, snapshot.releaseId, domain.active_release_id, () => env.DB.batch([
     env.DB.prepare("UPDATE release_versions SET status='superseded' WHERE domain_id=? AND status='published'").bind(domain.id),
     env.DB.prepare("UPDATE release_versions SET status='published', published_at=? WHERE id=?").bind(timestamp, snapshot.releaseId),
     env.DB.prepare("UPDATE domains SET active_release_id=?, lifecycle_status=?, updated_at=? WHERE id=?").bind(snapshot.releaseId, action === "pause" ? "paused" : "published", timestamp, domain.id),
     env.DB.prepare("INSERT INTO domain_deployments (id, domain_id, release_id, action, previous_release_id, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(randomId("deploy"), domain.id, snapshot.releaseId, action, domain.active_release_id, actor, timestamp),
     auditStatement(env.DB, { actor, action: `domain.${action}`, entityType: "domain", entityId: domain.id, requestId, before: { activeReleaseId: domain.active_release_id, status: domain.lifecycle_status }, after: { activeReleaseId: snapshot.releaseId, status: action === "pause" ? "paused" : "published" } }),
-  ]);
-  await env.SITE_CONFIG.put(activePointerKey(domain.hostname), snapshot.releaseId);
+  ]));
 }
 
 export function mountApi(app: App): void {
@@ -389,21 +417,25 @@ export function mountApi(app: App): void {
     const snapshot = releaseSnapshotSchema.parse(JSON.parse(target.snapshot_json));
     await c.env.SITE_CONFIG.put(releaseKey(target.id), target.snapshot_json);
     const timestamp = nowIso();
-    await c.env.DB.batch([
+    await switchActivePointer(c.env.SITE_CONFIG, domain.hostname, target.id, domain.active_release_id, () => c.env.DB.batch([
       c.env.DB.prepare("UPDATE release_versions SET status='superseded' WHERE domain_id=? AND status='published'").bind(domain.id),
       c.env.DB.prepare("UPDATE release_versions SET status='published', published_at=? WHERE id=?").bind(timestamp, target.id),
       c.env.DB.prepare("UPDATE domains SET active_release_id=?, lifecycle_status=?, updated_at=? WHERE id=?").bind(target.id, snapshot.state === "paused" ? "paused" : "published", timestamp, domain.id),
       c.env.DB.prepare("INSERT INTO domain_deployments (id, domain_id, release_id, action, previous_release_id, actor, created_at) VALUES (?, ?, ?, 'rollback', ?, ?, ?)")
         .bind(randomId("deploy"), domain.id, target.id, domain.active_release_id, c.get("actor"), timestamp),
       auditStatement(c.env.DB, { actor: c.get("actor"), action: "domain.rollback", entityType: "domain", entityId: domain.id, requestId: c.get("requestId"), before: { activeReleaseId: domain.active_release_id }, after: { activeReleaseId: target.id } }),
-    ]);
-    await c.env.SITE_CONFIG.put(activePointerKey(domain.hostname), target.id);
+    ]));
     return c.json({ releaseId: target.id, hostname: domain.hostname, status: snapshot.state === "paused" ? "paused" : "published" });
   });
 
   app.get("/api/jobs", async (c) => {
-    const result = await c.env.DB.prepare("SELECT id, job_type, status, attempts, error_message, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT 100").all();
+    const result = await c.env.DB.prepare("SELECT id, job_type, status, attempts, error_message, created_at, updated_at, json_extract(input_json,'$.domain.hostname') AS hostname FROM jobs ORDER BY created_at DESC LIMIT 100").all();
     return c.json({ jobs: result.results });
+  });
+
+  app.get("/api/audit", async (c) => {
+    const result = await c.env.DB.prepare("SELECT id,actor,action,entity_type,entity_id,request_id,occurred_at FROM audit_log ORDER BY occurred_at DESC LIMIT 100").all();
+    return c.json({ events: result.results });
   });
 
   app.post("/api/domains/:hostname/generate", async (c) => {
