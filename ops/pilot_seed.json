@@ -47,7 +47,6 @@
     "mcneillsappliance.com": {
       "schemaVersion": 1,
       "locale": "en-US",
-      "brandName": "McNeill's Appliance",
       "vertical": "Appliance repair",
       "location": { "city": "Denton", "region": "Texas", "country": "US" },
       "seo": {
@@ -81,13 +80,12 @@
         { "question": "When does replacement make more sense?", "answer": "Compare the repair total with the appliance's age, overall condition, parts availability, energy use, and the installed cost of replacing it." }
       ],
       "cta": { "label": "Check local repair availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage for Denton. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "McNeill's Appliance is an independent information and referral site, not the former business that used this domain. We do not claim affiliation with a prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
       "image": { "assetPath": "/__dm/assets/appliance-repair.webp", "alt": "An appliance technician examining a repair in a workshop" }
     },
     "heavenlyaircondition.com": {
       "schemaVersion": 1,
       "locale": "en-US",
-      "brandName": "Heavenly Air & Comfort",
       "vertical": "HVAC",
       "location": { "city": "Austin", "region": "Texas", "country": "US" },
       "seo": {
@@ -121,13 +119,12 @@
         { "question": "Is the lowest quote usually the best choice?", "answer": "Not always. Weigh the diagnosis, license, scope, warranty, and schedule with the price. A vague quote may leave necessary work out." }
       ],
       "cta": { "label": "Check local HVAC availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage around Austin. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "Heavenly Air & Comfort is an independent information and referral site, not the former business that used this domain. We do not claim affiliation with a prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
       "image": { "assetPath": "/__dm/assets/hvac-service.webp", "alt": "An HVAC technician checking an outdoor air-conditioning unit with gauges" }
     },
     "phoenixroofcoating.net": {
       "schemaVersion": 1,
       "locale": "en-US",
-      "brandName": "Phoenix Roof Coating",
       "vertical": "Roof coating",
       "location": { "city": "Phoenix", "region": "Arizona", "country": "US" },
       "seo": {
@@ -161,7 +158,7 @@
         { "question": "What should I check in the warranty?", "answer": "Check the duration, labor and material coverage, maintenance requirements, ponding-water exclusions, transfer terms, and claim process." }
       ],
       "cta": { "label": "Check local coating availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage around Phoenix. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "Phoenix Roof Coating is an independent information and referral site, not the former business that used this domain. We do not claim affiliation with a prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
       "image": { "assetPath": "/__dm/assets/roof-coating.webp", "alt": "An aerial view of a white reflective coating on a flat roof" }
     }
   }

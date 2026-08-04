@@ -27,7 +27,6 @@ export const faqSchema = z.object({
 export const contentSchema = z.object({
   schemaVersion: z.literal(1),
   locale: z.literal("en-US").default("en-US"),
-  brandName: text(80).optional(),
   vertical: text(60),
   location: z.object({
     city: text(80).optional(),

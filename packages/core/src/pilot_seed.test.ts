@@ -9,11 +9,16 @@ describe("pilot seed", () => {
     for (const domain of seed.domains) {
       const parsedDomain = domainImportSchema.parse(domain);
       expect(parsedDomain.sourceLabels.map((label) => label.toLowerCase())).not.toContain("traffic2");
-      const content = contentSchema.parse(seed.content[domain.hostname as keyof typeof seed.content]);
+      const rawContent = seed.content[domain.hostname as keyof typeof seed.content];
+      expect(rawContent).not.toHaveProperty("brandName");
+      const content = contentSchema.parse(rawContent);
       imagePaths.add(content.image.assetPath);
       const compactPath = content.image.assetPath.replace(/\.webp$/, "-960.webp");
       const html = compileHomeServicesHtml({ content, hostname: domain.hostname, releaseId: "rel_test", offerEnabled: false });
       expect(html).toContain(`${compactPath} 960w`);
+      expect(html).toContain(content.location.city);
+      expect(html).toContain("Guide");
+      expect(content.disclosure).toMatch(/^This website is an independent information and referral guide\./);
     }
     expect(imagePaths.size).toBe(3);
   });

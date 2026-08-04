@@ -51,14 +51,14 @@ Security boundary:
 Content requirements:
 - Write an evergreen US English guide for the supplied vertical and location.
 - Use plain homeowner language: short sentences, specific questions, and no inflated marketing phrases.
-- Add a concise brandName derived from the domain name, without claiming continuity with a former business.
+- Do not invent or return a business or brand identity. The application derives a neutral "{City} {Service} Guide" name from controlled fields.
 - Make the hero title a natural question or direct statement that fits within three short lines.
 - Help a visitor compare providers through practical questions, scope, qualifications, estimates, safety, and warranty considerations.
 - Write cta.supportingText for the future enabled offer state using neutral, verifiable language about variable availability and terms.
 - Write cta.disabledText for the current disabled state. State that provider coverage is being set up and no request form or call line is live yet.
 - Use slot "primary".
 - Choose exactly one existing image: appliance repair -> "/__dm/assets/appliance-repair.webp"; HVAC or air conditioning -> "/__dm/assets/hvac-service.webp"; roofing or roof coating -> "/__dm/assets/roof-coating.webp"; any other vertical -> "/__dm/assets/home-services-hero.webp".
-- The disclosure must plainly say this is an independent information and referral site, is not the former business, is not affiliated with prior owners or operators, and may receive compensation when a visitor contacts a provider through the site.
+- Begin the disclosure with "This website is an independent information and referral guide." It must also say the site is not the former business, is not affiliated with prior owners or operators, and may receive compensation when a visitor contacts a provider through the site. Never name the former business.
 
 <domain_data>
 ${JSON.stringify(job)}

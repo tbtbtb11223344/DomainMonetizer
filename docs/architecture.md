@@ -46,6 +46,7 @@ Rollback changes the active pointer to an earlier immutable release. Pausing cha
 - Codex jobs use a third, independent runner secret. The local runner invokes `codex exec` ephemerally in a read-only sandbox, constrains output with JSON Schema, and submits drafts back through server-side validation; generated content is never auto-approved or auto-published.
 - Internal site-edge/control calls use a service binding plus a constant-time shared-secret check.
 - Content is structured JSON; AI cannot supply arbitrary HTML, scripts, URLs, or headers.
+- The displayed site identity is not an AI or import field. The renderer deterministically uses `{city} {vertical} Guide`, so former-business names cannot be reintroduced through generated content.
 - Outbound URLs are never accepted from the browser. The control plane resolves an active offer from server-side policy.
 - Audit records accompany every mutation.
 - No raw IP addresses are retained. Visitor identifiers are short-lived, first-party random IDs and may be stored only as a one-way hash.

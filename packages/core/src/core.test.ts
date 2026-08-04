@@ -4,7 +4,6 @@ import { canonicalHostname, compileHomeServicesHtml, contentSchema, escapeHtml }
 const content = contentSchema.parse({
   schemaVersion: 1,
   locale: "en-US",
-  brandName: "Tulsa Appliance Guide",
   vertical: "appliance repair",
   location: { city: "Tulsa", region: "OK", country: "US" },
   seo: { title: "Appliance repair guide in Tulsa", description: "Learn how to compare appliance repair providers in Tulsa, Oklahoma." },
@@ -38,7 +37,8 @@ describe("core contracts", () => {
   it("compiles a disclosure-forward page without arbitrary inline scripts", () => {
     const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_1", offerEnabled: true });
     expect(html).toContain("independent referral website");
-    expect(html).toContain("Tulsa Appliance Guide");
+    expect(html).toContain("Tulsa Appliance Repair Guide");
+    expect(html).not.toContain("example.com home");
     expect(html).toContain('data-offer="enabled"');
     expect(html).toContain('class="mobile-action"');
     expect(html).toContain('href="/go/primary"');

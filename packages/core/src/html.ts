@@ -13,6 +13,15 @@ function locationLabel(content: DomainContent): string {
   return [content.location.city, content.location.region].filter(Boolean).join(", ");
 }
 
+function guideBrand(content: DomainContent): string {
+  const place = content.location.city ?? content.location.region ?? "Local";
+  const vertical = content.vertical
+    .split(/\s+/)
+    .map((word) => word === word.toUpperCase() ? word : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .join(" ");
+  return `${place} ${vertical} Guide`;
+}
+
 function verticalSlug(vertical: string): string {
   return vertical.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
@@ -54,7 +63,7 @@ export function compileHomeServicesHtml(input: {
   const { content, hostname, releaseId, offerEnabled } = input;
   const e = escapeHtml;
   const place = locationLabel(content);
-  const brand = content.brandName ?? hostname;
+  const brand = guideBrand(content);
   const credit = photoCredit(content.image.assetPath);
   const responsive = responsiveImage(content.image.assetPath);
   const serviceItems = content.services

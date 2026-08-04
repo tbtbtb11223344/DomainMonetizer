@@ -11,7 +11,6 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "locale": { "const": "en-US" },
-        "brandName": { "type": "string", "minLength": 1, "maxLength": 80 },
         "vertical": { "type": "string", "minLength": 1, "maxLength": 60 },
         "location": {
           "type": "object",
