@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 
 const baseUrl = (process.env.CONTROL_URL || "https://admin.multibrands.net").replace(/\/$/, "");
 const token = process.env.OPERATOR_API_TOKEN;
+const accessClientId = process.env.CF_ACCESS_CLIENT_ID;
+const accessClientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 if (!token) throw new Error("OPERATOR_API_TOKEN is required");
+if (Boolean(accessClientId) !== Boolean(accessClientSecret)) throw new Error("Both CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required together");
 
 const seed = JSON.parse(await readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"));
 
@@ -12,6 +15,7 @@ async function call(path, init = {}) {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      ...(accessClientId ? { "CF-Access-Client-Id": accessClientId, "CF-Access-Client-Secret": accessClientSecret } : {}),
       ...(init.headers || {}),
     },
   });

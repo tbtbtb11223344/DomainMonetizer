@@ -38,6 +38,8 @@
     "ENVIRONMENT": "production",
     "ALLOWED_ADMIN_EMAIL": "tbsolutions.info@gmail.com",
     "ALLOW_LOCAL_ADMIN": "false",
+    "ACCESS_TEAM_DOMAIN": "orange-wave-8a30.cloudflareaccess.com",
+    "ACCESS_AUD": "43f1ce551d5b14fc4ca04dcf365f82971aff3e94874473a673e5ceb15904b999",
     "CLOUDFLARE_ACCOUNT_ID": "7a79cc0f0a61c4a47d066be454804f16",
     "ANALYTICS_DATASET": "domain_monetizer_events",
     "PREVIEW_HOSTNAME": "preview.multibrands.net"

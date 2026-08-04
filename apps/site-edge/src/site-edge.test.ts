@@ -76,6 +76,13 @@ describe("site edge", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 
+  it("redirects www requests to the canonical apex hostname", async () => {
+    const { env } = environment();
+    const response = await worker.fetch(new Request("https://www.pilot-example.com/help?from=www"), env as never);
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("https://pilot-example.com/help?from=www");
+  });
+
   it("does not allow undeclared offer slots", async () => {
     const { env } = environment();
     const response = await worker.fetch(new Request("https://pilot-example.com/go/primary"), env as never);

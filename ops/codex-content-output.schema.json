@@ -101,7 +101,14 @@
           "additionalProperties": false,
           "required": ["assetPath", "alt"],
           "properties": {
-            "assetPath": { "const": "/__dm/assets/home-services-hero.webp" },
+            "assetPath": {
+              "enum": [
+                "/__dm/assets/appliance-repair.webp",
+                "/__dm/assets/hvac-service.webp",
+                "/__dm/assets/roof-coating.webp",
+                "/__dm/assets/home-services-hero.webp"
+              ]
+            },
             "alt": { "type": "string", "minLength": 1, "maxLength": 160 }
           }
         }

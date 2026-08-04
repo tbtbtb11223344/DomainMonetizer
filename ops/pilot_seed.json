@@ -54,33 +54,33 @@
         "description": "A practical, independent guide to comparing appliance repair options, estimates, warranties, and technician qualifications in Denton."
       },
       "hero": {
-        "eyebrow": "Denton appliance repair guide",
-        "title": "Know what to ask before an appliance repair visit",
-        "summary": "Compare local repair options with a clear checklist for diagnosis fees, parts, timelines, warranties, and technician experience."
+        "eyebrow": "Appliance repair in Denton, TX",
+        "title": "Need an appliance looked at?",
+        "summary": "Have the model number and symptoms ready. Before booking, ask about the trip fee, parts, timing, and repair warranty."
       },
-      "servicesHeading": "A useful repair quote should make these points clear",
+      "servicesHeading": "Three questions to ask before you book",
       "services": [
-        { "title": "Diagnosis and fees", "description": "Ask what the diagnostic visit costs, what it covers, and whether that fee is credited toward an approved repair." },
-        { "title": "Parts and warranty", "description": "Confirm whether parts are original or compatible replacements and get both parts and labor warranty terms in writing." },
-        { "title": "Repair versus replace", "description": "Compare the quoted repair cost with the appliance age, expected remaining life, energy use, and price of replacement." }
+        { "title": "What is the service-call fee?", "description": "Ask what the visit includes and whether the fee is applied to the repair if you approve the work." },
+        { "title": "Do you service this brand?", "description": "Share the brand, model, and error code before the visit so the technician can confirm experience and parts access." },
+        { "title": "What is covered afterward?", "description": "Get the parts and labor warranty in writing, including any charge for a return visit." }
       ],
       "guide": {
-        "heading": "Prepare the details that help a technician diagnose faster",
+        "heading": "What to have ready when you call",
         "paragraphs": [
-          "Record the appliance brand, model number, approximate age, error codes, unusual sounds, and when the problem began. Photos or a short video can help a provider decide which tools or parts may be needed.",
-          "Before authorizing work, request an itemized estimate covering labor, parts, service fees, tax, and any return-visit charges. Do not rely on a verbal maximum if the diagnosis could change the price.",
-          "For gas appliances, electrical faults, burning smells, or active leaks, stop using the unit and follow the manufacturer or utility company's safety guidance before arranging service."
+          "Write down the brand, model number, approximate age, error code, and when the problem started. A photo or short video of the symptom can be useful.",
+          "Before work begins, ask for a written total that separates the service call, labor, parts, tax, and any follow-up charges.",
+          "Stop using an appliance with a gas smell, burning odor, sparking, or an active leak. Follow the manufacturer or utility company's safety guidance first."
         ]
       },
       "faqHeading": "Appliance repair questions",
       "faqs": [
-        { "question": "Should I ask for an estimate before the visit?", "answer": "Ask for the service-call or diagnostic fee in advance. A final repair estimate usually follows an inspection because parts and labor depend on the confirmed fault." },
-        { "question": "What warranty details matter?", "answer": "Get the length of parts and labor coverage, what is excluded, who handles a repeat failure, and whether another service-call fee would apply." },
-        { "question": "When might replacement make more sense?", "answer": "Consider replacement when repair is a large share of a comparable new unit's price, the appliance is near its expected service life, or major parts are unavailable." }
+        { "question": "Can I get a price before the visit?", "answer": "You can usually confirm the service-call fee. A firm repair price often comes after the technician identifies the failed part." },
+        { "question": "What should the warranty say?", "answer": "Look for separate parts and labor terms, exclusions, and whether another service-call fee applies if the same problem returns." },
+        { "question": "When should I consider replacement?", "answer": "Compare the repair total with the appliance's age, condition, parts availability, energy use, and the installed cost of a replacement." }
       ],
-      "cta": { "label": "Compare appliance repair options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "cta": { "label": "Compare appliance repair options", "supportingText": "We are checking provider coverage for Denton. No request form is live yet.", "slot": "primary" },
       "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
-      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A technician inspecting the internal components of a household appliance" }
+      "image": { "assetPath": "/__dm/assets/appliance-repair.webp", "alt": "An appliance technician examining a repair in a workshop" }
     },
     "heavenlyaircondition.com": {
       "schemaVersion": 1,
@@ -92,33 +92,33 @@
         "description": "An independent guide to comparing HVAC service, repair estimates, licensing, warranties, and emergency availability around Austin."
       },
       "hero": {
-        "eyebrow": "Austin-area HVAC guide",
-        "title": "Compare heating and cooling help with fewer surprises",
-        "summary": "Use a practical checklist to discuss symptoms, diagnostic charges, repair choices, equipment efficiency, and written warranty coverage."
+        "eyebrow": "HVAC service in Austin, TX",
+        "title": "AC not keeping up? Start with the basics.",
+        "summary": "Tell the provider what the system is doing, how old it is, and when the problem started. Then confirm the diagnostic fee and next steps."
       },
-      "servicesHeading": "What to clarify with an HVAC provider",
+      "servicesHeading": "What to ask before an HVAC visit",
       "services": [
-        { "title": "Licensing and insurance", "description": "Verify the contractor's current Texas licensing and insurance, and ask who will perform the work at your property." },
-        { "title": "Diagnostic scope", "description": "Ask what the visit includes, whether after-hours rates apply, and when you will receive a written diagnosis and estimate." },
-        { "title": "Repair and replacement choices", "description": "Request side-by-side costs, efficiency information, expected equipment life, available rebates, and warranty terms before deciding." }
+        { "title": "What does the diagnostic fee cover?", "description": "Confirm the visit price, after-hours charges, and whether you receive a written diagnosis before approving work." },
+        { "title": "Is the contractor licensed?", "description": "Ask for the Texas contractor license number and verify who will perform the work at your property." },
+        { "title": "What are my repair choices?", "description": "Ask for the immediate repair, any optional work, and replacement pricing to be listed separately." }
       ],
       "guide": {
-        "heading": "Describe the system and symptoms before the appointment",
+        "heading": "Details that make the first call easier",
         "paragraphs": [
-          "Share the equipment type, approximate age, thermostat behavior, unusual noises or odors, recent maintenance, and whether the issue affects the whole property or only certain rooms.",
-          "An itemized proposal should separate diagnostic charges, labor, parts, refrigerant if relevant, permits, and optional upgrades. Confirm whether quoted pricing changes for evening or weekend work.",
-          "If you smell gas, see smoke, suspect carbon monoxide, or face another immediate safety issue, leave the area and contact the appropriate emergency or utility service before seeking routine HVAC help."
+          "Note the equipment type, approximate age, thermostat setting, unusual noises or odors, and whether the problem affects the whole home or only certain rooms.",
+          "A written proposal should separate the diagnostic charge, labor, parts, refrigerant if needed, permits, and optional upgrades.",
+          "If you smell gas, see smoke, or suspect carbon monoxide, leave the area and contact the appropriate emergency or utility service before arranging routine HVAC work."
         ]
       },
       "faqHeading": "HVAC service questions",
       "faqs": [
-        { "question": "What should a written HVAC estimate include?", "answer": "Look for the diagnosed problem, proposed work, equipment or part details, labor, fees, schedule, payment terms, and separate parts and labor warranties." },
-        { "question": "How can I compare replacement proposals?", "answer": "Compare system sizing assumptions, efficiency ratings, included duct or electrical work, permits, warranties, maintenance requirements, and total installed cost." },
-        { "question": "Is the lowest quote always the best option?", "answer": "Not necessarily. A complete diagnosis, appropriate licensing, clear scope, dependable warranty, and realistic schedule can matter more than the lowest initial price." }
+        { "question": "What belongs in a written HVAC estimate?", "answer": "It should identify the problem, proposed work, parts or equipment, labor, fees, schedule, payment terms, and warranties." },
+        { "question": "How do I compare replacement quotes?", "answer": "Compare equipment size and efficiency, duct or electrical work, permits, warranties, maintenance terms, and the total installed price." },
+        { "question": "Should I choose the lowest quote?", "answer": "Check the diagnosis, license, scope, warranty, and schedule along with price. A vague low quote can leave important work out." }
       ],
-      "cta": { "label": "Compare HVAC service options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "cta": { "label": "Compare HVAC service options", "supportingText": "We are checking provider coverage around Austin. No request form is live yet.", "slot": "primary" },
       "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
-      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A service technician inspecting mechanical equipment with diagnostic tools" }
+      "image": { "assetPath": "/__dm/assets/hvac-service.webp", "alt": "An HVAC technician checking an outdoor air-conditioning unit with gauges" }
     },
     "phoenixroofcoating.net": {
       "schemaVersion": 1,
@@ -130,33 +130,33 @@
         "description": "An independent guide to comparing roof coating contractors, preparation, product specifications, estimates, and warranties in Phoenix."
       },
       "hero": {
-        "eyebrow": "Phoenix roof coating guide",
-        "title": "Plan a roof coating project around the roof you actually have",
-        "summary": "Compare inspection findings, preparation methods, coating systems, coverage rates, drainage details, and written warranty terms."
+        "eyebrow": "Roof coating in Phoenix, AZ",
+        "title": "Considering a coating for a flat or foam roof?",
+        "summary": "Start with an inspection. A useful quote should explain the repairs, surface prep, coating product, application rate, and warranty."
       },
-      "servicesHeading": "What a roof coating proposal should explain",
+      "servicesHeading": "Three things the proposal should spell out",
       "services": [
-        { "title": "Roof condition", "description": "A provider should identify the roof material, moisture or adhesion concerns, damaged areas, drainage issues, and repairs needed before coating." },
-        { "title": "Preparation and product", "description": "Ask how the surface will be cleaned and repaired, which primer and coating will be used, and the specified application and coverage rates." },
-        { "title": "Scope and warranty", "description": "Confirm included penetrations, seams, parapets, ponding areas, cleanup, inspection steps, exclusions, and labor and material warranty terms." }
+        { "title": "What needs repair first?", "description": "The inspection should identify cracks, wet areas, drainage problems, damaged foam, seams, and penetrations before coating begins." },
+        { "title": "How will the roof be prepared?", "description": "Ask how the surface will be cleaned, repaired, and primed, and which product will be applied at what coverage rate." },
+        { "title": "What does the warranty cover?", "description": "Check the labor and material terms, exclusions, maintenance requirements, and who handles a claim." }
       ],
       "guide": {
-        "heading": "Compare systems, not just price per square foot",
+        "heading": "Information to get in writing",
         "paragraphs": [
-          "Coating suitability depends on the existing assembly and its condition. Ask each contractor to document the roof type, moisture findings, repair needs, and why the proposed system is compatible.",
-          "Request product data sheets and a written scope that states preparation, primer, number of coats, target dry-film thickness or coverage rate, flashing details, weather limits, and final inspection.",
-          "A coating may extend service life when the roof is a suitable candidate, but it is not a substitute for correcting structural damage, saturated insulation, active leaks, or drainage defects."
+          "Ask the contractor to identify the roof type, moisture findings, repairs, and why the proposed coating system is compatible with the existing surface.",
+          "The scope should list cleaning, primer, number of coats, coverage rate or finished thickness, details around penetrations, weather limits, and final inspection.",
+          "A coating is not a substitute for fixing structural damage, saturated insulation, active leaks, or drainage defects. Those items should be addressed first."
         ]
       },
       "faqHeading": "Roof coating questions",
       "faqs": [
-        { "question": "Can every roof be coated?", "answer": "No. Compatibility, remaining roof condition, trapped moisture, drainage, prior materials, and local requirements all affect whether coating is appropriate." },
-        { "question": "Why do coverage rates matter?", "answer": "The installed amount affects final membrane thickness and performance. The proposal should connect product specifications, roof area, application rate, and total material quantity." },
-        { "question": "What should I verify in the warranty?", "answer": "Check duration, whether labor and materials are both covered, required inspections or maintenance, ponding-water exclusions, transfer terms, and the party responsible for claims." }
+        { "question": "Can any roof be coated?", "answer": "No. The existing material, condition, trapped moisture, drainage, and prior repairs all affect whether a coating is suitable." },
+        { "question": "Why does the coverage rate matter?", "answer": "The amount applied determines the finished membrane thickness. The quote should connect the roof area, product specification, and total material quantity." },
+        { "question": "What should I check in the warranty?", "answer": "Check the duration, labor and material coverage, maintenance requirements, ponding-water exclusions, transfer terms, and claims process." }
       ],
-      "cta": { "label": "Compare roof coating options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "cta": { "label": "Compare roof coating options", "supportingText": "We are checking provider coverage around Phoenix. No request form is live yet.", "slot": "primary" },
       "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
-      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A contractor reviewing equipment and project details before home service work" }
+      "image": { "assetPath": "/__dm/assets/roof-coating.webp", "alt": "An aerial view of a white reflective coating on a flat roof" }
     }
   }
 }

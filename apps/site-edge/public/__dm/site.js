@@ -1,4 +1,21 @@
 (() => {
+  document.documentElement.classList.add("js");
+  requestAnimationFrame(() => document.documentElement.classList.add("ready"));
+
+  const reveal = document.querySelectorAll("[data-reveal]");
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add("visible");
+        observer.unobserve(entry.target);
+      }
+    }, { rootMargin: "0px 0px -8%", threshold: 0.08 });
+    reveal.forEach((element) => observer.observe(element));
+  } else {
+    reveal.forEach((element) => element.classList.add("visible"));
+  }
+
   const releaseId = document.body.dataset.release;
   let sent = false;
   const send = () => {

@@ -9,6 +9,8 @@ const schemaPath = join(root, "codex-content-output.schema.json");
 const once = process.argv.includes("--once");
 const baseUrl = (process.env.CONTROL_URL || "https://admin.multibrands.net").replace(/\/$/, "");
 const secret = process.env.CODEX_RUNNER_SECRET;
+const accessClientId = process.env.CF_ACCESS_CLIENT_ID;
+const accessClientSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 const codexBin = process.env.CODEX_BIN || "codex";
 const model = process.env.CODEX_MODEL || "gpt-5.6-terra";
 const configuredPollSeconds = Number(process.env.RUNNER_POLL_SECONDS || 15);
@@ -17,6 +19,7 @@ const pollMs = (Number.isFinite(configuredPollSeconds) ? Math.max(5, configuredP
 const timeoutMs = (Number.isFinite(configuredTimeoutSeconds) ? Math.min(3600, Math.max(60, configuredTimeoutSeconds)) : 1200) * 1000;
 
 if (!secret) throw new Error("CODEX_RUNNER_SECRET is required");
+if (Boolean(accessClientId) !== Boolean(accessClientSecret)) throw new Error("Both CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required together");
 if (!/^[a-zA-Z0-9._-]{1,80}$/.test(model)) throw new Error("CODEX_MODEL is invalid");
 if (!/^[a-zA-Z0-9_ .:\\/-]{1,260}$/.test(codexBin)) throw new Error("CODEX_BIN is invalid");
 
@@ -26,6 +29,7 @@ async function control(path, init = {}) {
     headers: {
       "Content-Type": "application/json",
       "X-DM-Runner-Secret": secret,
+      ...(accessClientId ? { "CF-Access-Client-Id": accessClientId, "CF-Access-Client-Secret": accessClientSecret } : {}),
       ...(init.headers || {}),
     },
   });
@@ -46,9 +50,12 @@ Security boundary:
 
 Content requirements:
 - Write an evergreen US English guide for the supplied vertical and location.
+- Use plain homeowner language: short sentences, specific questions, and no inflated marketing phrases.
+- Make the hero title a natural question or direct statement that fits within three short lines.
 - Help a visitor compare providers through practical questions, scope, qualifications, estimates, safety, and warranty considerations.
-- Keep the call to action disabled in meaning: use supportingText exactly "Provider matching will be enabled only after offer eligibility and tracking are verified."
-- Use slot "primary" and assetPath "/__dm/assets/home-services-hero.webp".
+- Keep the call to action disabled in meaning. State that provider coverage is being checked and no request form is live yet.
+- Use slot "primary".
+- Choose exactly one existing image: appliance repair -> "/__dm/assets/appliance-repair.webp"; HVAC or air conditioning -> "/__dm/assets/hvac-service.webp"; roofing or roof coating -> "/__dm/assets/roof-coating.webp"; any other vertical -> "/__dm/assets/home-services-hero.webp".
 - The disclosure must plainly say this is an independent information and referral site, is not the former business, and is not affiliated with prior owners or operators.
 
 <domain_data>

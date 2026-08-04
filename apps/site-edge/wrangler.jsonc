@@ -9,6 +9,30 @@
     {
       "pattern": "preview.multibrands.net",
       "custom_domain": true
+    },
+    {
+      "pattern": "mcneillsappliance.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.mcneillsappliance.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "heavenlyaircondition.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.heavenlyaircondition.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "phoenixroofcoating.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.phoenixroofcoating.net",
+      "custom_domain": true
     }
   ],
   "assets": {

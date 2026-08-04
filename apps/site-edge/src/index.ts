@@ -139,6 +139,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
   } catch {
     return errorResponse(400, "Invalid hostname");
   }
+  const requestedHostname = (request.headers.get("host") ?? url.hostname).toLowerCase().replace(/:\d+$/, "");
+  if (requestedHostname === `www.${hostname}`) {
+    url.hostname = hostname;
+    return withHeaders(Response.redirect(url, 301), { "Cache-Control": "public, max-age=3600" });
+  }
   const snapshot = await loadSnapshot(hostname, env).catch(() => null);
   if (!snapshot) return errorResponse(404, "Site not configured");
   if (snapshot.state === "paused") return withHeaders(new Response(snapshot.html, { status: 503, headers: { "Content-Type": "text/html; charset=UTF-8", "Cache-Control": "no-store", "Retry-After": "300" } }));
