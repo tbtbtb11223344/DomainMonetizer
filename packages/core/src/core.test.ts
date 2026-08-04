@@ -38,6 +38,8 @@ describe("core contracts", () => {
     const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_1", offerEnabled: true });
     expect(html).toContain("independent referral website");
     expect(html).toContain('href="/go/primary"');
+    expect(html).toContain('href="/__dm/site.css?v=rel_1"');
+    expect(html).toContain('src="/__dm/site.js?v=rel_1"');
     expect(html).not.toContain("<script>");
   });
 });

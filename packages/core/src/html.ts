@@ -61,7 +61,7 @@ export function compileHomeServicesHtml(input: {
   return `<!doctype html>
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${e(content.seo.title)}</title><meta name="description" content="${e(content.seo.description)}">
-<link rel="canonical" href="https://${e(hostname)}/"><link rel="stylesheet" href="/__dm/site.css">
+<link rel="canonical" href="https://${e(hostname)}/"><link rel="stylesheet" href="/__dm/site.css?v=${e(releaseId)}">
 </head><body data-release="${e(releaseId)}">
 <header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(hostname)} home">${e(hostname)}</a><span class="guide-label">Independent ${e(content.vertical.toLowerCase())} guide</span></div></header>
 <main>
@@ -72,7 +72,7 @@ export function compileHomeServicesHtml(input: {
 <section class="final" data-reveal><div><p class="eyebrow">Coverage status</p><h2>${offerEnabled ? "Ready to compare local options?" : `Matching is still being set up for ${locationText}.`}</h2></div>${action}</section>
 </main>
 <footer><p>${e(content.disclosure)}</p><p>&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
-<script src="/__dm/site.js" defer></script></body></html>`;
+<script src="/__dm/site.js?v=${e(releaseId)}" defer></script></body></html>`;
 }
 
 export function pausedHtml(hostname: string): string {
