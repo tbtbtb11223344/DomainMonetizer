@@ -62,7 +62,7 @@ $headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Clien
 Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/health/check -Headers $headers
 ```
 
-An authenticated operator can safely re-run a completed date. The operation is idempotent for metric rows and creates an audit record:
+An authenticated operator can safely re-run a completed date. Current and future UTC dates are rejected at both the API and rollup-core layers. The operation is idempotent for metric rows and creates an audit record:
 
 ```powershell
 $headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Client-Id" = $env:CF_ACCESS_CLIENT_ID; "CF-Access-Client-Secret" = $env:CF_ACCESS_CLIENT_SECRET; "Content-Type" = "application/json" }

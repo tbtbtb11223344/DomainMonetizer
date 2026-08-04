@@ -151,8 +151,9 @@ async function queryAnalytics<T>(env: Env, sql: string): Promise<T[]> {
   return analyticsData<T>(await response.json<unknown>());
 }
 
-export async function rollupDate(env: Env, metricDate: string): Promise<RollupResult> {
+export async function rollupDate(env: Env, metricDate: string, now = new Date()): Promise<RollupResult> {
   if (!validDate(metricDate)) throw new Error("Invalid analytics metric date");
+  if (metricDate > latestCompletedUtcDate(now)) throw new Error("Analytics metric date must be a completed UTC day");
   if (!/^[a-zA-Z0-9_]+$/.test(env.ANALYTICS_DATASET)) throw new Error("Invalid analytics dataset name");
   if (env.TELEMETRY_MIN_DATE && !validDate(env.TELEMETRY_MIN_DATE)) throw new Error("Invalid telemetry minimum date");
 
@@ -272,7 +273,7 @@ export async function rollupMissingCompletedDates(
   const failures: RollupBatchResult["failures"] = [];
   for (const metricDate of plannedDates) {
     try {
-      results.push(await rollupDate(env, metricDate));
+      results.push(await rollupDate(env, metricDate, now));
     } catch (error) {
       failures.push({
         metricDate,

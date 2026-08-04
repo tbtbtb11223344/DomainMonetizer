@@ -101,13 +101,24 @@ describe("analytics rollups", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await rollupDate(environment(db), "2026-08-04");
+    const result = await rollupDate(environment(db), "2026-08-04", new Date("2026-08-05T12:00:00.000Z"));
 
     expect(result.skipped).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(batches).toHaveLength(0);
     expect(statements.some((statement) => statement.sql.includes("analytics_rollup_runs"))).toBe(true);
     expect(statements.at(-1)?.args).toContain("skipped");
+  });
+
+  it("rejects partial and future UTC days before creating a rollup run", async () => {
+    const { db, statements } = fakeDatabase();
+
+    await expect(rollupDate(environment(db), "2026-08-05", new Date("2026-08-05T12:00:00.000Z")))
+      .rejects.toThrow("completed UTC day");
+    await expect(rollupDate(environment(db), "2026-08-06", new Date("2026-08-05T12:00:00.000Z")))
+      .rejects.toThrow("completed UTC day");
+
+    expect(statements).toHaveLength(0);
   });
 
   it("excludes preview traffic and persists qualified, unique, and country metrics", async () => {
@@ -126,7 +137,7 @@ describe("analytics rollups", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await rollupDate(environment(db), "2026-08-05");
+    const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1, maxSampleInterval: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -151,7 +162,7 @@ describe("analytics rollups", () => {
     const { db, batches } = fakeDatabase();
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { headers: { "Content-Type": "application/json" } })));
 
-    const result = await rollupDate(environment(db), "2026-08-05");
+    const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result).toMatchObject({ skipped: false, domainRows: 0, countryRows: 0, sourceRows: 0 });
     expect(batches).toHaveLength(1);
@@ -171,7 +182,7 @@ describe("analytics rollups", () => {
     ];
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } })));
 
-    const result = await rollupDate(environment(db), "2026-08-05");
+    const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result.maxSampleInterval).toBe(20);
     const domainInsert = batches[0]!.find((statement) => statement.sql.startsWith("INSERT INTO daily_domain_metrics"));
