@@ -25,13 +25,13 @@ const content = contentSchema.parse({
   image: { assetPath: "/__dm/assets/home-services-hero.webp", alt: "A technician checking a home appliance" },
 });
 
-function environment(overrides: Record<string, string> = {}) {
+function environment(overrides: Record<string, string> = {}, state: "live" | "paused" = "live") {
   const snapshot = releaseSnapshotSchema.parse({
     schemaVersion: 1,
     releaseId: "rel_test",
     domainId: "dom_test",
     hostname: "pilot-example.com",
-    state: "live",
+    state,
     templateKey: "home-services",
     content,
     offerSlots: [{ slot: "primary", enabled: false }],
@@ -112,6 +112,41 @@ describe("site edge", () => {
     const { env, events } = environment();
     const response = await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
     expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(events).toHaveLength(0);
+  });
+
+  it("distinguishes shared liveness from tenant readiness without recording traffic", async () => {
+    const { env, events } = environment();
+    const service = await worker.fetch(new Request("https://unknown-example.com/healthz"), env as never);
+    const ready = await worker.fetch(new Request("https://pilot-example.com/readyz"), env as never);
+    const readyPayload = await ready.json() as { ok: boolean; hostname: string; state: string; releaseId: string };
+
+    expect(service.status).toBe(200);
+    expect(ready.status).toBe(200);
+    expect(readyPayload).toEqual({ ok: true, service: "site-edge", hostname: "pilot-example.com", state: "live", releaseId: "rel_test" });
+    expect(ready.headers.get("Cache-Control")).toBe("no-store");
+    expect(ready.headers.get("Set-Cookie")).toBeNull();
+    expect(events).toHaveLength(0);
+  });
+
+  it("fails tenant readiness for missing and paused releases", async () => {
+    const liveEnvironment = environment();
+    const missing = await worker.fetch(new Request("https://unknown-example.com/readyz"), liveEnvironment.env as never);
+    expect(missing.status).toBe(503);
+    expect(await missing.json()).toMatchObject({ ok: false, hostname: "unknown-example.com", state: "missing" });
+
+    const pausedEnvironment = environment({}, "paused");
+    const paused = await worker.fetch(new Request("https://pilot-example.com/readyz"), pausedEnvironment.env as never);
+    expect(paused.status).toBe(503);
+    expect(await paused.json()).toMatchObject({ ok: false, hostname: "pilot-example.com", state: "paused", releaseId: "rel_test" });
+  });
+
+  it("supports bodyless tenant readiness probes", async () => {
+    const { env, events } = environment();
+    const response = await worker.fetch(new Request("https://pilot-example.com/readyz", { method: "HEAD" }), env as never);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
     expect(response.headers.get("Set-Cookie")).toBeNull();
     expect(events).toHaveLength(0);
   });

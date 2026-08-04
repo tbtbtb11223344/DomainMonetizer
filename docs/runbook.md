@@ -7,7 +7,7 @@
 - Portfolio nameserver changes are exact-list operations after preview and rollback verification.
 - A pilot domain must be `parking` + `available`, have no `Traffic2` label at action time, and pass a final registrar/API readback immediately before mutation.
 - Publish first, validate through an alternate hostname, then change one domain, verify TLS/DNS/HTTP/telemetry, and only then continue the pilot.
-- Use `preview.multibrands.net` for visual QA and `/healthz` for routine uptime checks. Do not repeatedly load live apex pages during the measurement window.
+- Use `preview.multibrands.net` for visual QA. Use `/healthz` only for shared Worker liveness and each apex domain's `/readyz` for tenant readiness. Neither endpoint records a visitor event; do not repeatedly load live apex pages during the measurement window.
 - Root `HEAD` probes do not create page-view events. Browser `GET` requests do.
 
 ## Commands

@@ -186,6 +186,16 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return withHeaders(Response.redirect(url, 301), { "Cache-Control": "public, max-age=3600" });
   }
   const snapshot = await loadSnapshot(hostname, env).catch(() => null);
+  if (url.pathname === "/readyz") {
+    const live = snapshot?.state === "live";
+    const payload = snapshot
+      ? { ok: live, service: "site-edge", hostname, state: snapshot.state, releaseId: snapshot.releaseId }
+      : { ok: false, service: "site-edge", hostname, state: "missing" };
+    return withHeaders(new Response(request.method === "HEAD" ? null : JSON.stringify(payload), {
+      status: live ? 200 : 503,
+      headers: { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-store" },
+    }));
+  }
   if (!snapshot) return errorResponse(404, "Site not configured");
   if (snapshot.state === "paused") return withHeaders(new Response(snapshot.html, { status: 503, headers: { "Content-Type": "text/html; charset=UTF-8", "Cache-Control": "no-store", "Retry-After": "300" } }));
 
