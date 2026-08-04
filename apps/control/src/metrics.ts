@@ -62,6 +62,17 @@ interface ExpectedCanaryRow {
   expected_canaries: string | number;
 }
 
+interface IntentRow {
+  domain_id: string;
+  metric_date: string;
+  path_class: string;
+  device_class: string;
+  referrer_class: string;
+  views: string | number;
+  likely_human_views: string | number;
+  max_sample_interval: string | number;
+}
+
 export interface RollupResult {
   skipped: boolean;
   metricDate: string;
@@ -207,19 +218,21 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, country`;
     const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
     const canariesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS observed_canaries, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1, metric_date`;
-    const [metricRows, uniqueRows, countryRows, sourceRows, canaryRows] = await Promise.all([
+    const intentSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob11 AS path_class, blob12 AS device_class, blob13 AS referrer_class, sum(_sample_interval * double1) AS views, sumIf(_sample_interval * double1, blob4 = 'human') AS likely_human_views, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' GROUP BY index1, metric_date, path_class, device_class, referrer_class`;
+    const [metricRows, uniqueRows, countryRows, sourceRows, canaryRows, intentRows] = await Promise.all([
       queryAnalytics<MetricRow>(env, metricsSql),
       queryAnalytics<UniqueRow>(env, uniquesSql),
       queryAnalytics<CountryRow>(env, countriesSql),
       queryAnalytics<SourceRow>(env, sourcesSql),
       queryAnalytics<CanaryRow>(env, canariesSql),
+      queryAnalytics<IntentRow>(env, intentSql),
     ]);
     const expectedRows = await env.DB.prepare(
       "SELECT d.id AS domain_id,COUNT(h.id) AS expected_canaries FROM domains d LEFT JOIN tenant_health_checks h ON h.domain_id=d.id AND h.check_source='scheduled' AND h.checked_at>=? AND h.checked_at<? WHERE d.lifecycle_status='published' GROUP BY d.id",
     ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
     const sampleByDomain = new Map<string, number>();
-    for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows]) {
+    for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows, ...intentRows]) {
       const key = `${row.domain_id}:${row.metric_date}`;
       sampleByDomain.set(key, Math.max(sampleByDomain.get(key) ?? 1, integer(row.max_sample_interval) || 1));
     }
@@ -244,6 +257,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_telemetry_health WHERE metric_date=?").bind(metricDate),
+      env.DB.prepare("DELETE FROM daily_domain_intent_metrics WHERE metric_date=?").bind(metricDate),
     ];
     for (const row of metricRows) {
       statements.push(
@@ -291,6 +305,18 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       statements.push(
         env.DB.prepare("INSERT INTO daily_domain_telemetry_health (domain_id,metric_date,expected_canaries,observed_canaries,canary_sample_interval,verified,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(domain_id,metric_date) DO UPDATE SET expected_canaries=excluded.expected_canaries,observed_canaries=excluded.observed_canaries,canary_sample_interval=excluded.canary_sample_interval,verified=excluded.verified,updated_at=excluded.updated_at")
           .bind(domainId, metricDate, expected, observed, sampleInterval, verified ? 1 : 0, timestamp),
+      );
+    }
+    const pathClasses = new Set(["root", "contact", "quote", "booking", "service", "location", "about", "other"]);
+    const deviceClasses = new Set(["mobile", "tablet", "desktop", "unknown"]);
+    const referrerClasses = new Set(["direct", "internal", "search", "directory", "social", "other"]);
+    for (const row of intentRows) {
+      const pathClass = pathClasses.has(row.path_class) ? row.path_class : "other";
+      const deviceClass = deviceClasses.has(row.device_class) ? row.device_class : "unknown";
+      const referrerClass = referrerClasses.has(row.referrer_class) ? row.referrer_class : "other";
+      statements.push(
+        env.DB.prepare("INSERT INTO daily_domain_intent_metrics (domain_id,metric_date,path_class,device_class,referrer_class,views,likely_human_views,updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(domain_id,metric_date,path_class,device_class,referrer_class) DO UPDATE SET views=excluded.views,likely_human_views=excluded.likely_human_views,updated_at=excluded.updated_at")
+          .bind(row.domain_id, row.metric_date, pathClass, deviceClass, referrerClass, integer(row.views), integer(row.likely_human_views), timestamp),
       );
     }
     await env.DB.batch(statements);

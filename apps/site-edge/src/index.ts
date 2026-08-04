@@ -32,6 +32,9 @@ interface CfProperties {
 }
 
 type VisitorClass = "human" | "bot" | "unknown";
+type PathClass = "root" | "contact" | "quote" | "booking" | "service" | "location" | "about" | "probe" | "other";
+type DeviceClass = "mobile" | "tablet" | "desktop" | "unknown";
+type ReferrerClass = "direct" | "internal" | "search" | "directory" | "social" | "other";
 
 interface VisitorClassification {
   visitorClass: VisitorClass;
@@ -79,6 +82,49 @@ function classifyVisitor(request: Request, interaction = false): VisitorClassifi
   return { visitorClass: "unknown", reason: "unrecognized_client", botScore: null };
 }
 
+function classifyPath(pathname: string): PathClass {
+  const path = pathname.toLowerCase();
+  if (path === "/") return "root";
+  if (/(^|\/)(?:wp-admin|wp-login|wp-content|wp-includes|xmlrpc|admin|login|signin|account|phpmyadmin|cgi-bin|vendor|boaform|\.well-known|\.env|\.git|\.svn|\.hg|\.aws)(?:\/|\.|$)|\.(?:php|asp|aspx|jsp|cgi|exe|sql|bak|ini|conf|config|log|zip|tar|gz|7z|rar|yml|yaml)(?:$|\/)/.test(path)) return "probe";
+  if (/(^|\/)(?:contact|contact-us|support)(?:\/|$)/.test(path)) return "contact";
+  if (/(^|\/)(?:quote|estimate|pricing|get-a-quote|request-a-quote)(?:\/|$)/.test(path)) return "quote";
+  if (/(^|\/)(?:book|booking|schedule|appointment)(?:\/|$)/.test(path)) return "booking";
+  if (/(^|\/)(?:services?|repair|installation|maintenance|replacement)(?:\/|$)/.test(path)) return "service";
+  if (/(^|\/)(?:locations?|service-areas?|areas-we-serve)(?:\/|$)/.test(path)) return "location";
+  if (/(^|\/)(?:about|about-us|team|staff)(?:\/|$)/.test(path)) return "about";
+  return "other";
+}
+
+function isSubresourceRequest(request: Request): boolean {
+  const destination = request.headers.get("sec-fetch-dest")?.toLowerCase();
+  return Boolean(destination && destination !== "document" && destination !== "iframe");
+}
+
+function classifyDevice(request: Request): DeviceClass {
+  const mobileHint = request.headers.get("sec-ch-ua-mobile");
+  if (mobileHint === "?1") return "mobile";
+  const userAgent = request.headers.get("user-agent")?.toLowerCase() ?? "";
+  if (/(ipad|tablet|kindle|silk)/.test(userAgent)) return "tablet";
+  if (/(mobile|iphone|ipod|android)/.test(userAgent)) return "mobile";
+  if (/(windows|macintosh|linux|cros|mozilla|chrome|safari|firefox|edg)\b/.test(userAgent)) return "desktop";
+  return "unknown";
+}
+
+function classifyReferrer(request: Request, hostname: string): ReferrerClass {
+  const raw = request.headers.get("referer");
+  if (!raw) return "direct";
+  try {
+    const referrerHostname = new URL(raw).hostname.toLowerCase().replace(/^www\./, "");
+    if (referrerHostname === hostname || referrerHostname === `www.${hostname}`) return "internal";
+    if (/(^|\.)(?:google|bing|yahoo|duckduckgo|ecosia|baidu|yandex)\./.test(`${referrerHostname}.`)) return "search";
+    if (/(^|\.)(?:yelp|yellowpages|mapquest|angi|homeadvisor|bbb|thumbtack)\./.test(`${referrerHostname}.`)) return "directory";
+    if (/(^|\.)(?:facebook|instagram|tiktok|linkedin|twitter|reddit|youtube)\./.test(`${referrerHostname}.`) || referrerHostname === "x.com") return "social";
+    return "other";
+  } catch {
+    return "other";
+  }
+}
+
 function eventPoint(
   request: Request,
   snapshot: ReleaseSnapshot,
@@ -100,6 +146,9 @@ function eventPoint(
       classification.reason,
       typeof cf?.asn === "number" ? String(cf.asn) : "",
       cf?.asOrganization?.slice(0, 100) ?? "",
+      classifyPath(new URL(request.url).pathname),
+      classifyDevice(request),
+      classifyReferrer(request, snapshot.hostname),
     ],
     doubles: [1, classification.botScore ?? -1],
   };
@@ -227,13 +276,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if (url.pathname.startsWith("/go/")) return handleGo(request, snapshot, url.pathname.slice(4), env);
   if (url.pathname === "/robots.txt") return withHeaders(new Response("User-agent: *\nAllow: /\nSitemap: https://" + hostname + "/sitemap.xml\n", { headers: { "Content-Type": "text/plain; charset=UTF-8", "Cache-Control": "public, max-age=3600" } }));
   if (url.pathname === "/sitemap.xml") return withHeaders(new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://${hostname}/</loc></url></urlset>`, { headers: { "Content-Type": "application/xml; charset=UTF-8", "Cache-Control": "public, max-age=3600" } }));
-  if (url.pathname !== "/") return errorResponse(404, "Page not found");
+  if (classifyPath(url.pathname) === "probe" || isSubresourceRequest(request)) return errorResponse(404, "Page not found");
 
   const headers = new Headers({
     "Content-Type": "text/html; charset=UTF-8",
     "Cache-Control": "no-store",
     "ETag": `"${snapshot.releaseId}"`,
     "Vary": "Accept-Encoding",
+    "X-Robots-Tag": "noindex, nofollow",
   });
   if (request.method === "GET") {
     const visitor = await pageVisitor(request, env);

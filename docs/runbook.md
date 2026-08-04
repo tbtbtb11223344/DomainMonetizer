@@ -8,7 +8,7 @@
 - A pilot domain must be `parking` + `available`, have no `Traffic2` label at action time, and pass a final registrar/API readback immediately before mutation.
 - Publish first, validate through an alternate hostname, then change one domain, verify TLS/DNS/HTTP/telemetry, and only then continue the pilot.
 - Use `preview.multibrands.net` for visual QA. Use `/healthz` only for shared Worker liveness and each apex domain's `/readyz` for tenant readiness. Neither endpoint records a visitor event; do not repeatedly load live apex pages during the measurement window.
-- Root `HEAD` probes do not create page-view events. Browser `GET` requests do.
+- `HEAD` probes do not create page-view events on root or legacy paths. Browser `GET` requests do. Safe legacy paths render the canonical `noindex` guide and contribute only coarse intent classes; sensitive and scanner paths fail closed as `404` without telemetry.
 - Tenant HTML must return `Cache-Control: no-store` while views are recorded server-side. Public HTML caching is a measurement defect; static `/__dm/` assets remain immutable and cacheable.
 
 ## Commands
@@ -73,7 +73,7 @@ Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/ro
 
 Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Confirm `telemetry.pipelineVerified=true` and `sampling.exactQualifiedSessions=true` before treating zero traffic or qualified sessions as exact. `sampling.detected=true` by itself means one or more weighted quality breakdowns were sampled, not that the distinct-session count was sampled. Do not interpret zero displayed traffic until both the latest completed-day run and its canary reconciliation are confirmed successful.
 
-For traffic quality, inspect each domain's `sourceMetrics` in `/api/domains/:hostname` or the **Traffic quality** section in the admin inspector. A browser-navigation classification is evidence, not proof by itself: review its country, ASN organization, engagement, and concentration. Hosting, cloud, research, or unexpected-country networks should be investigated before counting the traffic as commercially useful.
+For traffic quality, inspect each domain's `sourceMetrics` and `intentMetrics` in `/api/domains/:hostname`, or the **Traffic quality** and **Entry intent** sections in the admin inspector. A browser-navigation classification is evidence, not proof by itself: review its country, ASN organization, engagement, concentration, path class, device class, and referrer class. Hosting, cloud, research, or unexpected-country networks should be investigated before counting the traffic as commercially useful. Raw paths, query strings, and referrer URLs must never be added to the rollup or admin response.
 
 ## Emergency rollback
 

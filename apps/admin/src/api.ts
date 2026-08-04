@@ -137,6 +137,14 @@ export interface TelemetryHealthDay {
   updated_at: string;
 }
 
+export interface IntentMetric {
+  path_class: string;
+  device_class: string;
+  referrer_class: string;
+  views: number;
+  likely_human_views: number;
+}
+
 export interface DomainDetail {
   domain: DomainSummary;
   contents: VersionSummary[];
@@ -144,6 +152,7 @@ export interface DomainDetail {
   metrics: MetricDay[];
   countryMetrics: CountryMetric[];
   sourceMetrics: SourceMetric[];
+  intentMetrics: IntentMetric[];
   telemetryHealth: TelemetryHealthDay[];
   healthChecks: TenantHealthCheck[];
 }
