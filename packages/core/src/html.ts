@@ -13,6 +13,10 @@ function locationLabel(content: DomainContent): string {
   return [content.location.city, content.location.region].filter(Boolean).join(", ");
 }
 
+function verticalSlug(vertical: string): string {
+  return vertical.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
 function photoCredit(assetPath: string): { label: string; href: string } | null {
   const credits: Record<string, { label: string; href: string }> = {
     "/__dm/assets/appliance-repair.webp": {
@@ -31,6 +35,16 @@ function photoCredit(assetPath: string): { label: string; href: string } | null 
   return credits[assetPath] ?? null;
 }
 
+function responsiveImage(assetPath: string): { compactPath: string; sourceWidth: number; sourceHeight: number } | null {
+  const images: Record<string, { compactPath: string; sourceWidth: number; sourceHeight: number }> = {
+    "/__dm/assets/appliance-repair.webp": { compactPath: "/__dm/assets/appliance-repair-960.webp", sourceWidth: 1600, sourceHeight: 2133 },
+    "/__dm/assets/home-services-hero.webp": { compactPath: "/__dm/assets/home-services-hero-960.webp", sourceWidth: 1122, sourceHeight: 1402 },
+    "/__dm/assets/hvac-service.webp": { compactPath: "/__dm/assets/hvac-service-960.webp", sourceWidth: 1600, sourceHeight: 1137 },
+    "/__dm/assets/roof-coating.webp": { compactPath: "/__dm/assets/roof-coating-960.webp", sourceWidth: 1400, sourceHeight: 1050 },
+  };
+  return images[assetPath] ?? null;
+}
+
 export function compileHomeServicesHtml(input: {
   content: DomainContent;
   hostname: string;
@@ -40,19 +54,29 @@ export function compileHomeServicesHtml(input: {
   const { content, hostname, releaseId, offerEnabled } = input;
   const e = escapeHtml;
   const place = locationLabel(content);
+  const brand = content.brandName ?? hostname;
   const credit = photoCredit(content.image.assetPath);
+  const responsive = responsiveImage(content.image.assetPath);
   const serviceItems = content.services
     .map(
-      (service, index) => `<li class="service"><span class="service-number">${index + 1}</span><div><h3>${e(service.title)}</h3><p>${e(service.description)}</p></div></li>`,
+      (service, index) => `<li class="service"><span class="service-number">0${index + 1}</span><div><h3>${e(service.title)}</h3><p>${e(service.description)}</p></div></li>`,
     )
     .join("");
-  const guide = content.guide.paragraphs.map((paragraph) => `<p>${e(paragraph)}</p>`).join("");
+  const guide = content.guide.paragraphs
+    .map((paragraph, index) => `<li><span>0${index + 1}</span><p>${e(paragraph)}</p></li>`)
+    .join("");
   const faqs = content.faqs
     .map((faq) => `<details><summary>${e(faq.question)}<span aria-hidden="true"></span></summary><p>${e(faq.answer)}</p></details>`)
     .join("");
   const action = offerEnabled
-    ? `<div class="action"><a class="cta" href="/go/${e(content.cta.slot)}" rel="nofollow sponsored">${e(content.cta.label)} <span aria-hidden="true">&rarr;</span></a><p>${e(content.cta.supportingText)}</p></div>`
-    : `<div class="matching-status" role="status"><span class="status-dot" aria-hidden="true"></span><div><strong>Provider matching is not live yet</strong><span>${e(content.cta.supportingText)}</span></div></div>`;
+    ? `<div class="action"><a class="cta" href="/go/${e(content.cta.slot)}" rel="nofollow sponsored"><span>${e(content.cta.label)}</span><span class="cta-arrow" aria-hidden="true">&rarr;</span></a><p>${e(content.cta.supportingText)}</p></div>`
+    : `<div class="matching-status" role="status"><span class="status-dot" aria-hidden="true"></span><div><span class="status-label">Coverage update</span><strong>Local matching is not open yet</strong><span>${e(content.cta.disabledText ?? "Provider coverage is still being set up. No request form or call line is live yet.")}</span></div></div>`;
+  const headerAction = offerEnabled
+    ? `<a class="mast-cta" href="/go/${e(content.cta.slot)}" rel="nofollow sponsored">Check availability <span aria-hidden="true">&rarr;</span></a>`
+    : `<span class="mast-status"><span aria-hidden="true"></span> Matching opening soon</span>`;
+  const mobileAction = offerEnabled
+    ? `<div class="mobile-action"><a href="/go/${e(content.cta.slot)}" rel="nofollow sponsored"><span>${e(content.cta.label)}</span><span aria-hidden="true">&rarr;</span></a></div>`
+    : "";
   const creditHtml = credit
     ? `<span class="photo-credit">Photo: <a href="${e(credit.href)}" target="_blank" rel="noopener noreferrer">${e(credit.label)}</a></span>`
     : "";
@@ -61,18 +85,20 @@ export function compileHomeServicesHtml(input: {
   return `<!doctype html>
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${e(content.seo.title)}</title><meta name="description" content="${e(content.seo.description)}">
-<link rel="canonical" href="https://${e(hostname)}/"><link rel="stylesheet" href="/__dm/site.css?v=${e(releaseId)}">
-</head><body data-release="${e(releaseId)}">
-<header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(hostname)} home">${e(hostname)}</a><span class="guide-label">Independent ${e(content.vertical.toLowerCase())} guide</span></div></header>
+<meta name="theme-color" content="#0b202a">
+<link rel="canonical" href="https://${e(hostname)}/"><link rel="icon" href="/__dm/assets/site-mark.svg?v=${e(releaseId)}" type="image/svg+xml"><link rel="stylesheet" href="/__dm/site.css?v=${e(releaseId)}">
+</head><body data-release="${e(releaseId)}" data-vertical="${e(verticalSlug(content.vertical))}" data-offer="${offerEnabled ? "enabled" : "disabled"}">
+<header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(brand)} home"><span class="brand-mark" aria-hidden="true"></span><span>${e(brand)}</span></a>${headerAction}</div></header>
 <main>
-<section class="hero"><div class="hero-inner"><div class="hero-copy"><p class="eyebrow">${e(content.hero.eyebrow)}</p><h1>${e(content.hero.title)}</h1><p class="lede">${e(content.hero.summary)}</p>${action}</div><figure class="hero-media"><img src="${e(content.image.assetPath)}" alt="${e(content.image.alt)}" width="1200" height="900"><figcaption><span>${e(content.vertical)} information for ${locationText}</span>${creditHtml}</figcaption></figure></div></section>
-<section class="services section" data-reveal><div class="section-intro"><p class="eyebrow">Before you call</p><h2>${e(content.servicesHeading)}</h2></div><ol>${serviceItems}</ol></section>
-<section class="guide" data-reveal><div class="guide-inner"><div class="guide-heading"><p class="eyebrow">What to have ready</p><h2>${e(content.guide.heading)}</h2></div><div class="prose">${guide}</div></div></section>
-<section class="faq section" data-reveal><div class="section-intro"><p class="eyebrow">Common questions</p><h2>${e(content.faqHeading)}</h2></div><div class="faq-list">${faqs}</div></section>
-<section class="final" data-reveal><div><p class="eyebrow">Coverage status</p><h2>${offerEnabled ? "Ready to compare local options?" : `Matching is still being set up for ${locationText}.`}</h2></div>${action}</section>
+<section class="hero"><div class="hero-media"><img src="${e(content.image.assetPath)}"${responsive ? ` srcset="${e(responsive.compactPath)} 960w, ${e(content.image.assetPath)} ${responsive.sourceWidth}w" sizes="100vw"` : ""} alt="${e(content.image.alt)}" width="${responsive?.sourceWidth ?? 1200}" height="${responsive?.sourceHeight ?? 900}" fetchpriority="high" decoding="async"><div class="hero-shade"></div></div><div class="hero-inner"><div class="hero-copy"><p class="eyebrow">${e(content.hero.eyebrow)}</p><h1>${e(content.hero.title)}</h1><p class="lede">${e(content.hero.summary)}</p>${action}<p class="hero-disclosure">Independent referral guide <span aria-hidden="true">&middot;</span> Provider terms and availability vary</p></div></div><div class="hero-caption"><span>${e(content.vertical)} guidance for ${locationText}</span>${creditHtml}</div></section>
+<section class="trust-band" aria-label="Why use this guide"><div class="trust-inner"><div><span class="trust-number">01</span><p><strong>Focused on ${locationText}</strong><span>Built around nearby ${e(content.vertical.toLowerCase())} needs.</span></p></div><div><span class="trust-number">02</span><p><strong>Know before you book</strong><span>Useful questions, clearer estimates, fewer surprises.</span></p></div><div><span class="trust-number">03</span><p><strong>Clear, practical guidance</strong><span>Choose your next step with more confidence.</span></p></div></div></section>
+<section class="services section" data-reveal><div class="section-intro"><p class="eyebrow">A smarter first call</p><h2>${e(content.servicesHeading)}</h2></div><ol>${serviceItems}</ol></section>
+<section class="guide" data-reveal><div class="guide-inner"><div class="guide-heading"><p class="eyebrow">Your 60-second prep</p><h2>${e(content.guide.heading)}</h2></div><ol class="prep-list">${guide}</ol></div></section>
+<section class="faq section" data-reveal><div class="section-intro"><p class="eyebrow">Straight answers</p><h2>${e(content.faqHeading)}</h2></div><div class="faq-list">${faqs}</div></section>
+<section class="final" data-reveal><div class="final-inner"><div><p class="eyebrow">${offerEnabled ? "Your next step" : "Coverage update"}</p><h2>${offerEnabled ? `Ready to explore ${e(content.vertical.toLowerCase())} options in ${locationText}?` : `We're building a better way to find ${e(content.vertical.toLowerCase())} help in ${locationText}.`}</h2></div>${action}</div></section>
 </main>
-<footer><p>${e(content.disclosure)}</p><p>&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
-<script src="/__dm/site.js?v=${e(releaseId)}" defer></script></body></html>`;
+<footer><div class="footer-brand"><span class="brand-mark" aria-hidden="true"></span><strong>${e(brand)}</strong></div><p>${e(content.disclosure)}</p><p class="copyright">&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
+${mobileAction}<script src="/__dm/site.js?v=${e(releaseId)}" defer></script></body></html>`;
 }
 
 export function pausedHtml(hostname: string): string {

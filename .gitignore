@@ -5,6 +5,8 @@
 .dev.vars
 .wrangler/
 coverage/
+.playwright-cli/
+output/playwright/
 dist/
 *.tsbuildinfo
 

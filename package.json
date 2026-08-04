@@ -11,6 +11,7 @@
     "dev:admin": "pnpm --filter @domain-monetizer/admin dev",
     "dev:control": "pnpm --filter @domain-monetizer/control dev",
     "dev:site": "pnpm --filter @domain-monetizer/site-edge dev",
+    "preview:pilots": "node --experimental-strip-types ops/render_pilot_previews.mjs",
     "runner:codex": "node ops/run_codex_jobs.mjs --once",
     "test": "vitest run",
     "test:watch": "vitest",

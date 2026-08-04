@@ -11,6 +11,7 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "locale": { "const": "en-US" },
+        "brandName": { "type": "string", "minLength": 1, "maxLength": 80 },
         "vertical": { "type": "string", "minLength": 1, "maxLength": 60 },
         "location": {
           "type": "object",
@@ -92,6 +93,7 @@
           "properties": {
             "label": { "type": "string", "minLength": 1, "maxLength": 48 },
             "supportingText": { "type": "string", "minLength": 1, "maxLength": 180 },
+            "disabledText": { "type": "string", "minLength": 1, "maxLength": 200 },
             "slot": { "const": "primary" }
           }
         },

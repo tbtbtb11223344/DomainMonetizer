@@ -4,6 +4,7 @@ import { canonicalHostname, compileHomeServicesHtml, contentSchema, escapeHtml }
 const content = contentSchema.parse({
   schemaVersion: 1,
   locale: "en-US",
+  brandName: "Tulsa Appliance Guide",
   vertical: "appliance repair",
   location: { city: "Tulsa", region: "OK", country: "US" },
   seo: { title: "Appliance repair guide in Tulsa", description: "Learn how to compare appliance repair providers in Tulsa, Oklahoma." },
@@ -19,7 +20,7 @@ const content = contentSchema.parse({
     { question: "Should I repair or replace?", answer: "Age, repair cost, efficiency, and parts availability all matter." },
     { question: "What should an estimate include?", answer: "Look for diagnostic fees, labor, parts, taxes, and warranty information." },
   ],
-  cta: { label: "Compare local options", supportingText: "Availability and eligibility vary by location.", slot: "primary" },
+  cta: { label: "Compare local options", supportingText: "Availability and eligibility vary by location.", disabledText: "Matching is still being set up in Tulsa.", slot: "primary" },
   disclosure: "This is an independent referral website and is not the former business that may have used this domain. We may receive compensation when you contact a provider.",
   image: { assetPath: "/__dm/assets/home-services-hero.webp", alt: "A technician checking a home appliance" },
 });
@@ -37,9 +38,23 @@ describe("core contracts", () => {
   it("compiles a disclosure-forward page without arbitrary inline scripts", () => {
     const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_1", offerEnabled: true });
     expect(html).toContain("independent referral website");
+    expect(html).toContain("Tulsa Appliance Guide");
+    expect(html).toContain('data-offer="enabled"');
+    expect(html).toContain('class="mobile-action"');
     expect(html).toContain('href="/go/primary"');
     expect(html).toContain('href="/__dm/site.css?v=rel_1"');
+    expect(html).toContain('href="/__dm/assets/site-mark.svg?v=rel_1"');
+    expect(html).toContain('srcset="/__dm/assets/home-services-hero-960.webp 960w, /__dm/assets/home-services-hero.webp 1122w"');
     expect(html).toContain('src="/__dm/site.js?v=rel_1"');
     expect(html).not.toContain("<script>");
+  });
+
+  it("renders an honest non-interactive status when matching is disabled", () => {
+    const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_2", offerEnabled: false });
+    expect(html).toContain('data-offer="disabled"');
+    expect(html).toContain("Matching is still being set up in Tulsa.");
+    expect(html).not.toContain('class="mobile-action"');
+    expect(html).not.toContain('class="mast-cta"');
+    expect(html).not.toContain('href="/go/primary"');
   });
 });
