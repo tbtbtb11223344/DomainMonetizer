@@ -148,6 +148,21 @@ for (const blocker of overview.reviewBlockers ?? []) {
   if (operationalBlockers.has(blocker)) issues.push(`Evidence gate reports ${blocker}`);
 }
 
+const monetization = overview.monetization;
+if (!monetization) {
+  issues.push("Monetization state is missing from the control-plane overview");
+} else {
+  for (const [label, value] of Object.entries({
+    "active offers": monetization.activeOffers,
+    "active routing policies": monetization.activeRoutingPolicies,
+    clicks: monetization.clicks,
+    conversions: monetization.conversions,
+    postbacks: monetization.postbacks,
+  })) {
+    if (Number(value ?? 0) !== 0) issues.push(`Measurement-only invariant violated: ${label}=${Number(value)}`);
+  }
+}
+
 const report = {
   auditedAt: new Date().toISOString(),
   guard: issues.length ? "FAIL" : "PASS",
@@ -168,6 +183,7 @@ const report = {
     health: overview.health,
     sampling: overview.sampling,
     telemetry: overview.telemetry,
+    monetization: overview.monetization,
     latestRun: overview.latestRun,
   },
   issues,
