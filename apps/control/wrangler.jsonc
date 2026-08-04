@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "domain-monetizer-control",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-04",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "admin.multibrands.net",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "../admin/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "domain-monetizer",
+      "database_id": "d09b3cd5-e339-4519-a354-c88a0d3876e8",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SITE_CONFIG",
+      "id": "82bb4774d1814e26b87d1c50b2b5948c"
+    }
+  ],
+  "triggers": {
+    "crons": ["17 4 * * *"]
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "ALLOWED_ADMIN_EMAIL": "tbsolutions.info@gmail.com",
+    "ALLOW_LOCAL_ADMIN": "false",
+    "CLOUDFLARE_ACCOUNT_ID": "7a79cc0f0a61c4a47d066be454804f16",
+    "ANALYTICS_DATASET": "domain_monetizer_events",
+    "PREVIEW_HOSTNAME": "preview.multibrands.net"
+  }
+}

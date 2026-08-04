@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["content"],
+  "properties": {
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "locale", "vertical", "location", "seo", "hero", "servicesHeading", "services", "guide", "faqHeading", "faqs", "cta", "disclosure", "image"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "locale": { "const": "en-US" },
+        "vertical": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["country"],
+          "properties": {
+            "city": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "region": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "country": { "const": "US" }
+          }
+        },
+        "seo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "description"],
+          "properties": {
+            "title": { "type": "string", "minLength": 1, "maxLength": 65 },
+            "description": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        },
+        "hero": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eyebrow", "title", "summary"],
+          "properties": {
+            "eyebrow": { "type": "string", "minLength": 1, "maxLength": 80 },
+            "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 320 }
+          }
+        },
+        "servicesHeading": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "services": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "description"],
+            "properties": {
+              "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "description": { "type": "string", "minLength": 1, "maxLength": 260 }
+            }
+          }
+        },
+        "guide": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["heading", "paragraphs"],
+          "properties": {
+            "heading": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "paragraphs": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 5,
+              "items": { "type": "string", "minLength": 1, "maxLength": 700 }
+            }
+          }
+        },
+        "faqHeading": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "faqs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["question", "answer"],
+            "properties": {
+              "question": { "type": "string", "minLength": 1, "maxLength": 140 },
+              "answer": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          }
+        },
+        "cta": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["label", "supportingText", "slot"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1, "maxLength": 48 },
+            "supportingText": { "type": "string", "minLength": 1, "maxLength": 180 },
+            "slot": { "const": "primary" }
+          }
+        },
+        "disclosure": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["assetPath", "alt"],
+          "properties": {
+            "assetPath": { "const": "/__dm/assets/home-services-hero.webp" },
+            "alt": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@domain-monetizer/site-edge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@domain-monetizer/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260804.1",
+    "typescript": "7.0.2",
+    "wrangler": "4.118.0"
+  }
+}

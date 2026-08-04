@@ -2,6 +2,11 @@
 .env
 .env.*
 !.env.example
+.dev.vars
+.wrangler/
+coverage/
+dist/
+*.tsbuildinfo
 
 # Python
 __pycache__/

@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "domain-monetizer-site-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-04",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "preview.multibrands.net",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SITE_CONFIG",
+      "id": "82bb4774d1814e26b87d1c50b2b5948c"
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "EVENTS",
+      "dataset": "domain_monetizer_events"
+    }
+  ],
+  "services": [
+    {
+      "binding": "CONTROL",
+      "service": "domain-monetizer-control"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+}

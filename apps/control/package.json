@@ -1,0 +1,22 @@
+{
+  "name": "@domain-monetizer/control",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@domain-monetizer/core": "workspace:*",
+    "hono": "4.13.0",
+    "jose": "6.2.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260804.1",
+    "typescript": "7.0.2",
+    "wrangler": "4.118.0"
+  }
+}

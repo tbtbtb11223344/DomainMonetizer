@@ -1,0 +1,26 @@
+{
+  "name": "domain-monetizer",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22 <26"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev:admin": "pnpm --filter @domain-monetizer/admin dev",
+    "dev:control": "pnpm --filter @domain-monetizer/control dev",
+    "dev:site": "pnpm --filter @domain-monetizer/site-edge dev",
+    "runner:codex": "node ops/run_codex_jobs.mjs --once",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260804.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10",
+    "wrangler": "4.118.0"
+  }
+}

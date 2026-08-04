@@ -1,0 +1,162 @@
+{
+  "domains": [
+    {
+      "hostname": "mcneillsappliance.com",
+      "registrar": "GoDaddy",
+      "sourceType": "parking",
+      "sourceStatus": "available",
+      "sourceLabels": [],
+      "vertical": "appliance repair",
+      "country": "US",
+      "aiSummary": "DomainAnalyzer classified the prior site as an appliance sales, parts, and repair business in Denton, Texas.",
+      "aiKeywords": ["appliance repair", "appliance parts", "Denton", "Texas"],
+      "traffic30dVisitors": 11,
+      "parking30dRevenueUsd": 0,
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+    },
+    {
+      "hostname": "heavenlyaircondition.com",
+      "registrar": "Gname",
+      "sourceType": "parking",
+      "sourceStatus": "available",
+      "sourceLabels": [],
+      "vertical": "hvac",
+      "country": "US",
+      "aiSummary": "DomainAnalyzer classified the prior site as an HVAC service business serving Austin and Pflugerville, Texas.",
+      "aiKeywords": ["HVAC", "air conditioning", "Austin", "Pflugerville", "Texas"],
+      "traffic30dVisitors": 8,
+      "parking30dRevenueUsd": 0,
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+    },
+    {
+      "hostname": "phoenixroofcoating.net",
+      "registrar": "GoDaddy",
+      "sourceType": "parking",
+      "sourceStatus": "available",
+      "sourceLabels": [],
+      "vertical": "roofing",
+      "country": "US",
+      "aiSummary": "DomainAnalyzer classified the prior site as a commercial roof coating and waterproofing business in the Phoenix area.",
+      "aiKeywords": ["roof coating", "roof repair", "waterproofing", "Phoenix", "Arizona"],
+      "traffic30dVisitors": 6,
+      "parking30dRevenueUsd": 0,
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+    }
+  ],
+  "content": {
+    "mcneillsappliance.com": {
+      "schemaVersion": 1,
+      "locale": "en-US",
+      "vertical": "Appliance repair",
+      "location": { "city": "Denton", "region": "Texas", "country": "US" },
+      "seo": {
+        "title": "Appliance Repair Options in Denton, Texas",
+        "description": "A practical, independent guide to comparing appliance repair options, estimates, warranties, and technician qualifications in Denton."
+      },
+      "hero": {
+        "eyebrow": "Denton appliance repair guide",
+        "title": "Know what to ask before an appliance repair visit",
+        "summary": "Compare local repair options with a clear checklist for diagnosis fees, parts, timelines, warranties, and technician experience."
+      },
+      "servicesHeading": "A useful repair quote should make these points clear",
+      "services": [
+        { "title": "Diagnosis and fees", "description": "Ask what the diagnostic visit costs, what it covers, and whether that fee is credited toward an approved repair." },
+        { "title": "Parts and warranty", "description": "Confirm whether parts are original or compatible replacements and get both parts and labor warranty terms in writing." },
+        { "title": "Repair versus replace", "description": "Compare the quoted repair cost with the appliance age, expected remaining life, energy use, and price of replacement." }
+      ],
+      "guide": {
+        "heading": "Prepare the details that help a technician diagnose faster",
+        "paragraphs": [
+          "Record the appliance brand, model number, approximate age, error codes, unusual sounds, and when the problem began. Photos or a short video can help a provider decide which tools or parts may be needed.",
+          "Before authorizing work, request an itemized estimate covering labor, parts, service fees, tax, and any return-visit charges. Do not rely on a verbal maximum if the diagnosis could change the price.",
+          "For gas appliances, electrical faults, burning smells, or active leaks, stop using the unit and follow the manufacturer or utility company's safety guidance before arranging service."
+        ]
+      },
+      "faqHeading": "Appliance repair questions",
+      "faqs": [
+        { "question": "Should I ask for an estimate before the visit?", "answer": "Ask for the service-call or diagnostic fee in advance. A final repair estimate usually follows an inspection because parts and labor depend on the confirmed fault." },
+        { "question": "What warranty details matter?", "answer": "Get the length of parts and labor coverage, what is excluded, who handles a repeat failure, and whether another service-call fee would apply." },
+        { "question": "When might replacement make more sense?", "answer": "Consider replacement when repair is a large share of a comparable new unit's price, the appliance is near its expected service life, or major parts are unavailable." }
+      ],
+      "cta": { "label": "Compare appliance repair options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
+      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A technician inspecting the internal components of a household appliance" }
+    },
+    "heavenlyaircondition.com": {
+      "schemaVersion": 1,
+      "locale": "en-US",
+      "vertical": "HVAC",
+      "location": { "city": "Austin", "region": "Texas", "country": "US" },
+      "seo": {
+        "title": "HVAC Service Options in the Austin Area",
+        "description": "An independent guide to comparing HVAC service, repair estimates, licensing, warranties, and emergency availability around Austin."
+      },
+      "hero": {
+        "eyebrow": "Austin-area HVAC guide",
+        "title": "Compare heating and cooling help with fewer surprises",
+        "summary": "Use a practical checklist to discuss symptoms, diagnostic charges, repair choices, equipment efficiency, and written warranty coverage."
+      },
+      "servicesHeading": "What to clarify with an HVAC provider",
+      "services": [
+        { "title": "Licensing and insurance", "description": "Verify the contractor's current Texas licensing and insurance, and ask who will perform the work at your property." },
+        { "title": "Diagnostic scope", "description": "Ask what the visit includes, whether after-hours rates apply, and when you will receive a written diagnosis and estimate." },
+        { "title": "Repair and replacement choices", "description": "Request side-by-side costs, efficiency information, expected equipment life, available rebates, and warranty terms before deciding." }
+      ],
+      "guide": {
+        "heading": "Describe the system and symptoms before the appointment",
+        "paragraphs": [
+          "Share the equipment type, approximate age, thermostat behavior, unusual noises or odors, recent maintenance, and whether the issue affects the whole property or only certain rooms.",
+          "An itemized proposal should separate diagnostic charges, labor, parts, refrigerant if relevant, permits, and optional upgrades. Confirm whether quoted pricing changes for evening or weekend work.",
+          "If you smell gas, see smoke, suspect carbon monoxide, or face another immediate safety issue, leave the area and contact the appropriate emergency or utility service before seeking routine HVAC help."
+        ]
+      },
+      "faqHeading": "HVAC service questions",
+      "faqs": [
+        { "question": "What should a written HVAC estimate include?", "answer": "Look for the diagnosed problem, proposed work, equipment or part details, labor, fees, schedule, payment terms, and separate parts and labor warranties." },
+        { "question": "How can I compare replacement proposals?", "answer": "Compare system sizing assumptions, efficiency ratings, included duct or electrical work, permits, warranties, maintenance requirements, and total installed cost." },
+        { "question": "Is the lowest quote always the best option?", "answer": "Not necessarily. A complete diagnosis, appropriate licensing, clear scope, dependable warranty, and realistic schedule can matter more than the lowest initial price." }
+      ],
+      "cta": { "label": "Compare HVAC service options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
+      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A service technician inspecting mechanical equipment with diagnostic tools" }
+    },
+    "phoenixroofcoating.net": {
+      "schemaVersion": 1,
+      "locale": "en-US",
+      "vertical": "Roof coating",
+      "location": { "city": "Phoenix", "region": "Arizona", "country": "US" },
+      "seo": {
+        "title": "Roof Coating Options in Phoenix, Arizona",
+        "description": "An independent guide to comparing roof coating contractors, preparation, product specifications, estimates, and warranties in Phoenix."
+      },
+      "hero": {
+        "eyebrow": "Phoenix roof coating guide",
+        "title": "Plan a roof coating project around the roof you actually have",
+        "summary": "Compare inspection findings, preparation methods, coating systems, coverage rates, drainage details, and written warranty terms."
+      },
+      "servicesHeading": "What a roof coating proposal should explain",
+      "services": [
+        { "title": "Roof condition", "description": "A provider should identify the roof material, moisture or adhesion concerns, damaged areas, drainage issues, and repairs needed before coating." },
+        { "title": "Preparation and product", "description": "Ask how the surface will be cleaned and repaired, which primer and coating will be used, and the specified application and coverage rates." },
+        { "title": "Scope and warranty", "description": "Confirm included penetrations, seams, parapets, ponding areas, cleanup, inspection steps, exclusions, and labor and material warranty terms." }
+      ],
+      "guide": {
+        "heading": "Compare systems, not just price per square foot",
+        "paragraphs": [
+          "Coating suitability depends on the existing assembly and its condition. Ask each contractor to document the roof type, moisture findings, repair needs, and why the proposed system is compatible.",
+          "Request product data sheets and a written scope that states preparation, primer, number of coats, target dry-film thickness or coverage rate, flashing details, weather limits, and final inspection.",
+          "A coating may extend service life when the roof is a suitable candidate, but it is not a substitute for correcting structural damage, saturated insulation, active leaks, or drainage defects."
+        ]
+      },
+      "faqHeading": "Roof coating questions",
+      "faqs": [
+        { "question": "Can every roof be coated?", "answer": "No. Compatibility, remaining roof condition, trapped moisture, drainage, prior materials, and local requirements all affect whether coating is appropriate." },
+        { "question": "Why do coverage rates matter?", "answer": "The installed amount affects final membrane thickness and performance. The proposal should connect product specifications, roof area, application rate, and total material quantity." },
+        { "question": "What should I verify in the warranty?", "answer": "Check duration, whether labor and materials are both covered, required inspections or maintenance, ponding-water exclusions, transfer terms, and the party responsible for claims." }
+      ],
+      "cta": { "label": "Compare roof coating options", "supportingText": "Provider matching will be enabled only after offer eligibility and tracking are verified.", "slot": "primary" },
+      "disclosure": "This is an independent information and referral site. It is not the former business that used this domain and does not claim affiliation with any prior owner or operator. Provider availability and terms must be verified directly.",
+      "image": { "assetPath": "/__dm/assets/home-services-hero.webp", "alt": "A contractor reviewing equipment and project details before home service work" }
+    }
+  }
+}

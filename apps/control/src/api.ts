@@ -1,0 +1,392 @@
+import {
+  activePointerKey,
+  compileHomeServicesHtml,
+  contentMutationSchema,
+  contentSchema,
+  domainImportSchema,
+  pausedHtml,
+  randomId,
+  releaseKey,
+  releaseSnapshotSchema,
+  sha256Hex,
+  timingSafeEqualString,
+  type DomainContent,
+  type ReleaseSnapshot,
+} from "@domain-monetizer/core";
+import { Hono } from "hono";
+import { z } from "zod";
+import { auditStatement, nextVersion, nowIso } from "./db";
+import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
+
+type App = Hono<{ Bindings: Env; Variables: Variables }>;
+
+function jsonValue<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function publicDomain(row: DomainRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    hostname: row.hostname,
+    lifecycleStatus: row.lifecycle_status,
+    registrar: row.registrar,
+    sourceType: row.source_type,
+    sourceStatus: row.source_status,
+    sourceLabels: jsonValue(row.source_labels_json, []),
+    vertical: row.vertical,
+    country: row.country,
+    locale: row.locale,
+    aiSummary: row.ai_summary,
+    aiKeywords: jsonValue(row.ai_keywords_json, []),
+    traffic30dVisitors: row.traffic_30d_visitors,
+    parking30dRevenueUsd: row.parking_30d_revenue_usd,
+    trafficEvidenceAt: row.traffic_evidence_at,
+    activeReleaseId: row.active_release_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function domainByHostname(db: D1Database, hostname: string): Promise<DomainRow | null> {
+  return db.prepare("SELECT * FROM domains WHERE hostname = ?").bind(hostname.toLowerCase()).first<DomainRow>();
+}
+
+async function domainById(db: D1Database, id: string): Promise<DomainRow | null> {
+  return db.prepare("SELECT * FROM domains WHERE id = ?").bind(id).first<DomainRow>();
+}
+
+function zodError(error: z.ZodError): Record<string, unknown> {
+  return { error: "Validation failed", issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) };
+}
+
+async function compileRelease(
+  env: Env,
+  actor: string,
+  requestId: string,
+  domain: DomainRow,
+  contentRow: ContentRow,
+  state: "live" | "paused" = "live",
+  hostname = domain.hostname,
+): Promise<ReleaseSnapshot> {
+  const content = contentSchema.parse(JSON.parse(contentRow.content_json));
+  const releaseId = randomId("rel");
+  const enabledOffer = await env.DB.prepare(
+    "SELECT 1 AS found FROM routing_policies rp JOIN offers o ON o.id=rp.offer_id WHERE rp.status='active' AND o.status='active' AND (rp.domain_id=? OR rp.domain_id IS NULL) AND (rp.vertical IS NULL OR rp.vertical=?) AND (rp.country IS NULL OR rp.country=?) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) LIMIT 1",
+  )
+    .bind(domain.id, domain.vertical, domain.country, nowIso(), nowIso())
+    .first<{ found: number }>();
+  const offerEnabled = Boolean(enabledOffer);
+  const html = state === "live" ? compileHomeServicesHtml({ content, hostname, releaseId, offerEnabled }) : pausedHtml(hostname);
+  return releaseSnapshotSchema.parse({
+    schemaVersion: 1,
+    releaseId,
+    domainId: domain.id,
+    hostname,
+    state,
+    templateKey: "home-services",
+    content,
+    offerSlots: [{ slot: content.cta.slot, enabled: state === "live" && offerEnabled }],
+    html,
+    compiledAt: nowIso(),
+    _audit: { actor, requestId },
+  });
+}
+
+async function persistPublishedRelease(
+  env: Env,
+  actor: string,
+  requestId: string,
+  domain: DomainRow,
+  contentRow: ContentRow,
+  snapshot: ReleaseSnapshot,
+  action: "publish" | "pause",
+): Promise<void> {
+  const releaseVersion = await nextVersion(env.DB, "release_versions", domain.id);
+  const serialized = JSON.stringify(snapshot);
+  const checksum = await sha256Hex(serialized);
+  const timestamp = nowIso();
+  await env.DB.prepare("INSERT INTO release_versions (id, domain_id, version, template_version_id, content_version_id, snapshot_json, snapshot_sha256, status, created_by, created_at) VALUES (?, ?, ?, 'tpl-home-services-v1', ?, ?, ?, 'compiled', ?, ?)")
+    .bind(snapshot.releaseId, domain.id, releaseVersion, contentRow.id, serialized, checksum, actor, timestamp)
+    .run();
+  await env.SITE_CONFIG.put(releaseKey(snapshot.releaseId), serialized);
+  await env.DB.batch([
+    env.DB.prepare("UPDATE release_versions SET status='superseded' WHERE domain_id=? AND status='published'").bind(domain.id),
+    env.DB.prepare("UPDATE release_versions SET status='published', published_at=? WHERE id=?").bind(timestamp, snapshot.releaseId),
+    env.DB.prepare("UPDATE domains SET active_release_id=?, lifecycle_status=?, updated_at=? WHERE id=?").bind(snapshot.releaseId, action === "pause" ? "paused" : "published", timestamp, domain.id),
+    env.DB.prepare("INSERT INTO domain_deployments (id, domain_id, release_id, action, previous_release_id, actor, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(randomId("deploy"), domain.id, snapshot.releaseId, action, domain.active_release_id, actor, timestamp),
+    auditStatement(env.DB, { actor, action: `domain.${action}`, entityType: "domain", entityId: domain.id, requestId, before: { activeReleaseId: domain.active_release_id, status: domain.lifecycle_status }, after: { activeReleaseId: snapshot.releaseId, status: action === "pause" ? "paused" : "published" } }),
+  ]);
+  await env.SITE_CONFIG.put(activePointerKey(domain.hostname), snapshot.releaseId);
+}
+
+export function mountApi(app: App): void {
+  app.get("/api/domains", async (c) => {
+    const search = (c.req.query("search") ?? "").trim().toLowerCase();
+    const status = (c.req.query("status") ?? "").trim();
+    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
+    const clauses: string[] = [];
+    const values: unknown[] = [];
+    if (search) { clauses.push("(hostname LIKE ? OR vertical LIKE ?)"); values.push(`%${search}%`, `%${search}%`); }
+    if (status) { clauses.push("lifecycle_status = ?"); values.push(status); }
+    const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+    const result = await c.env.DB.prepare(`SELECT * FROM domains${where} ORDER BY COALESCE(traffic_30d_visitors, 0) DESC, hostname ASC LIMIT ?`).bind(...values, limit).all<DomainRow>();
+    return c.json({ domains: result.results.map(publicDomain) });
+  });
+
+  app.post("/api/domains/import", async (c) => {
+    const raw = await c.req.json<unknown>().catch(() => null);
+    const body = z.object({ domains: z.array(domainImportSchema).min(1).max(500) }).safeParse(raw);
+    if (!body.success) return c.json(zodError(body.error), 400);
+    const invalid = body.data.domains.filter((domain) => domain.sourceLabels.some((label) => label.trim().toLowerCase() === "traffic2"));
+    if (invalid.length) return c.json({ error: "Traffic2 domains are not eligible", hostnames: invalid.map((domain) => domain.hostname) }, 409);
+    const actor = c.get("actor");
+    const requestId = c.get("requestId");
+    const timestamp = nowIso();
+    const statements: D1PreparedStatement[] = [];
+    const imported: string[] = [];
+    for (const domain of body.data.domains) {
+      const id = randomId("dom");
+      statements.push(
+        c.env.DB.prepare("INSERT INTO domains (id, hostname, lifecycle_status, registrar, source_type, source_status, source_labels_json, vertical, country, ai_summary, ai_keywords_json, traffic_30d_visitors, parking_30d_revenue_usd, traffic_evidence_at, created_at, updated_at) VALUES (?, ?, 'draft', ?, 'parking', 'available', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hostname) DO UPDATE SET registrar=excluded.registrar, source_type=excluded.source_type, source_status=excluded.source_status, source_labels_json=excluded.source_labels_json, vertical=excluded.vertical, country=excluded.country, ai_summary=excluded.ai_summary, ai_keywords_json=excluded.ai_keywords_json, traffic_30d_visitors=excluded.traffic_30d_visitors, parking_30d_revenue_usd=excluded.parking_30d_revenue_usd, traffic_evidence_at=excluded.traffic_evidence_at, updated_at=excluded.updated_at")
+          .bind(id, domain.hostname, domain.registrar ?? null, JSON.stringify(domain.sourceLabels), domain.vertical ?? null, domain.country ?? null, domain.aiSummary ?? null, JSON.stringify(domain.aiKeywords), domain.traffic30dVisitors ?? null, domain.parking30dRevenueUsd ?? null, domain.trafficEvidenceAt ?? null, timestamp, timestamp),
+        auditStatement(c.env.DB, { actor, action: "domain.import", entityType: "domain", entityId: domain.hostname, requestId, after: domain }),
+      );
+      imported.push(domain.hostname);
+    }
+    await c.env.DB.batch(statements);
+    return c.json({ imported }, 201);
+  });
+
+  app.get("/api/domains/:hostname", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const contents = await c.env.DB.prepare("SELECT id, version, provenance, status, created_by, created_at, approved_at FROM content_versions WHERE domain_id=? ORDER BY version DESC").bind(domain.id).all();
+    const releases = await c.env.DB.prepare("SELECT id, version, status, created_by, created_at, published_at FROM release_versions WHERE domain_id=? ORDER BY version DESC").bind(domain.id).all();
+    const metrics = await c.env.DB.prepare("SELECT * FROM daily_domain_metrics WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
+    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results });
+  });
+
+  app.post("/api/domains/:hostname/content", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const parsed = contentMutationSchema.safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!parsed.success) return c.json(zodError(parsed.error), 400);
+    const actor = c.get("actor");
+    const timestamp = nowIso();
+    const serialized = JSON.stringify(parsed.data.content);
+    const contentId = randomId("cnt");
+    const version = await nextVersion(c.env.DB, "content_versions", domain.id);
+    await c.env.DB.batch([
+      c.env.DB.prepare("INSERT INTO content_versions (id, domain_id, version, content_json, content_sha256, provenance, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)")
+        .bind(contentId, domain.id, version, serialized, await sha256Hex(serialized), parsed.data.provenance, actor, timestamp),
+      auditStatement(c.env.DB, { actor, action: "content.create", entityType: "content", entityId: contentId, requestId: c.get("requestId"), after: { domainId: domain.id, version, provenance: parsed.data.provenance } }),
+    ]);
+    return c.json({ id: contentId, version, status: "draft" }, 201);
+  });
+
+  app.post("/api/content/:id/approve", async (c) => {
+    const content = await c.env.DB.prepare("SELECT * FROM content_versions WHERE id=?").bind(c.req.param("id")).first<ContentRow>();
+    if (!content) return c.json({ error: "Content not found" }, 404);
+    if (content.status !== "draft") return c.json({ error: "Only draft content can be approved" }, 409);
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE content_versions SET status='retired' WHERE domain_id=? AND status='approved'").bind(content.domain_id),
+      c.env.DB.prepare("UPDATE content_versions SET status='approved', approved_at=? WHERE id=?").bind(timestamp, content.id),
+      c.env.DB.prepare("UPDATE domains SET lifecycle_status=CASE WHEN lifecycle_status='draft' THEN 'ready' ELSE lifecycle_status END, updated_at=? WHERE id=?").bind(timestamp, content.domain_id),
+      auditStatement(c.env.DB, { actor: c.get("actor"), action: "content.approve", entityType: "content", entityId: content.id, requestId: c.get("requestId"), before: { status: content.status }, after: { status: "approved" } }),
+    ]);
+    return c.json({ id: content.id, status: "approved" });
+  });
+
+  app.get("/api/content/:id/preview", async (c) => {
+    const content = await c.env.DB.prepare("SELECT * FROM content_versions WHERE id=?").bind(c.req.param("id")).first<ContentRow>();
+    if (!content) return c.json({ error: "Content not found" }, 404);
+    const domain = await domainById(c.env.DB, content.domain_id);
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const parsed = contentSchema.parse(JSON.parse(content.content_json));
+    const html = compileHomeServicesHtml({ content: parsed, hostname: domain.hostname, releaseId: `preview_${content.id}`, offerEnabled: false });
+    return c.html(html, 200, { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
+  });
+
+  app.post("/api/domains/:hostname/publish", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const content = await c.env.DB.prepare("SELECT * FROM content_versions WHERE domain_id=? AND status='approved' ORDER BY version DESC LIMIT 1").bind(domain.id).first<ContentRow>();
+    if (!content) return c.json({ error: "No approved content" }, 409);
+    const snapshot = await compileRelease(c.env, c.get("actor"), c.get("requestId"), domain, content);
+    await persistPublishedRelease(c.env, c.get("actor"), c.get("requestId"), domain, content, snapshot, "publish");
+    return c.json({ releaseId: snapshot.releaseId, hostname: domain.hostname, status: "published" });
+  });
+
+  app.post("/api/domains/:hostname/preview-deploy", async (c) => {
+    const previewHostname = c.env.PREVIEW_HOSTNAME?.trim().toLowerCase();
+    if (!previewHostname) return c.json({ error: "Preview hostname is not configured" }, 503);
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const content = await c.env.DB.prepare("SELECT * FROM content_versions WHERE domain_id=? AND status='approved' ORDER BY version DESC LIMIT 1").bind(domain.id).first<ContentRow>();
+    if (!content) return c.json({ error: "No approved content" }, 409);
+    const snapshot = await compileRelease(c.env, c.get("actor"), c.get("requestId"), domain, content, "live", previewHostname);
+    const serialized = JSON.stringify(snapshot);
+    const ttl = 7 * 24 * 60 * 60;
+    await c.env.SITE_CONFIG.put(releaseKey(snapshot.releaseId), serialized, { expirationTtl: ttl });
+    await c.env.SITE_CONFIG.put(activePointerKey(previewHostname), snapshot.releaseId, { expirationTtl: ttl });
+    await auditStatement(c.env.DB, {
+      actor: c.get("actor"),
+      action: "domain.preview_deploy",
+      entityType: "domain",
+      entityId: domain.id,
+      requestId: c.get("requestId"),
+      after: { previewHostname, releaseId: snapshot.releaseId },
+    }).run();
+    return c.json({ releaseId: snapshot.releaseId, sourceHostname: domain.hostname, previewHostname, expiresInSeconds: ttl });
+  });
+
+  app.post("/api/domains/:hostname/pause", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    if (!domain.active_release_id) return c.json({ error: "Domain has no active release" }, 409);
+    const active = await c.env.DB.prepare("SELECT * FROM release_versions WHERE id=?").bind(domain.active_release_id).first<ReleaseRow>();
+    if (!active) return c.json({ error: "Active release missing" }, 409);
+    const content = await c.env.DB.prepare("SELECT * FROM content_versions WHERE id=?").bind(active.content_version_id).first<ContentRow>();
+    if (!content) return c.json({ error: "Release content missing" }, 409);
+    const snapshot = await compileRelease(c.env, c.get("actor"), c.get("requestId"), domain, content, "paused");
+    await persistPublishedRelease(c.env, c.get("actor"), c.get("requestId"), domain, content, snapshot, "pause");
+    return c.json({ releaseId: snapshot.releaseId, hostname: domain.hostname, status: "paused" });
+  });
+
+  app.post("/api/domains/:hostname/rollback/:releaseId", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const target = await c.env.DB.prepare("SELECT * FROM release_versions WHERE id=? AND domain_id=?").bind(c.req.param("releaseId"), domain.id).first<ReleaseRow>();
+    if (!target) return c.json({ error: "Release not found" }, 404);
+    const snapshot = releaseSnapshotSchema.parse(JSON.parse(target.snapshot_json));
+    await c.env.SITE_CONFIG.put(releaseKey(target.id), target.snapshot_json);
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE release_versions SET status='superseded' WHERE domain_id=? AND status='published'").bind(domain.id),
+      c.env.DB.prepare("UPDATE release_versions SET status='published', published_at=? WHERE id=?").bind(timestamp, target.id),
+      c.env.DB.prepare("UPDATE domains SET active_release_id=?, lifecycle_status=?, updated_at=? WHERE id=?").bind(target.id, snapshot.state === "paused" ? "paused" : "published", timestamp, domain.id),
+      c.env.DB.prepare("INSERT INTO domain_deployments (id, domain_id, release_id, action, previous_release_id, actor, created_at) VALUES (?, ?, ?, 'rollback', ?, ?, ?)")
+        .bind(randomId("deploy"), domain.id, target.id, domain.active_release_id, c.get("actor"), timestamp),
+      auditStatement(c.env.DB, { actor: c.get("actor"), action: "domain.rollback", entityType: "domain", entityId: domain.id, requestId: c.get("requestId"), before: { activeReleaseId: domain.active_release_id }, after: { activeReleaseId: target.id } }),
+    ]);
+    await c.env.SITE_CONFIG.put(activePointerKey(domain.hostname), target.id);
+    return c.json({ releaseId: target.id, hostname: domain.hostname, status: snapshot.state === "paused" ? "paused" : "published" });
+  });
+
+  app.get("/api/jobs", async (c) => {
+    const result = await c.env.DB.prepare("SELECT id, job_type, status, attempts, error_message, created_at, updated_at FROM jobs ORDER BY created_at DESC LIMIT 100").all();
+    return c.json({ jobs: result.results });
+  });
+
+  app.post("/api/domains/:hostname/generate", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const jobId = randomId("job");
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("INSERT INTO jobs (id, job_type, status, input_json, attempts, created_at, updated_at) VALUES (?, 'generate_content', 'queued', ?, 0, ?, ?)")
+        .bind(jobId, JSON.stringify({ domain: publicDomain(domain), schemaVersion: 1 }), timestamp, timestamp),
+      auditStatement(c.env.DB, { actor: c.get("actor"), action: "job.enqueue", entityType: "job", entityId: jobId, requestId: c.get("requestId"), after: { jobType: "generate_content", domainId: domain.id } }),
+    ]);
+    return c.json({ id: jobId, status: "queued" }, 202);
+  });
+}
+
+const clickSchema = z.object({
+  domainId: z.string().min(1).max(100),
+  releaseId: z.string().min(1).max(100),
+  slot: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+  visitorIdHash: z.string().length(64).nullable(),
+  likelyHuman: z.boolean().nullable(),
+  country: z.string().max(8).nullable(),
+  userAgentClass: z.enum(["human", "bot", "unknown"]),
+});
+
+interface OfferSelection {
+  offer_id: string;
+  destination_url: string;
+  metadata_json: string;
+}
+
+export function mountInternal(app: App): void {
+  app.post("/internal/click", async (c) => {
+    const provided = c.req.header("X-DM-Internal-Secret") ?? "";
+    if (!provided || !c.env.CONTROL_SHARED_SECRET || !timingSafeEqualString(provided, c.env.CONTROL_SHARED_SECRET)) return c.json({ error: "Forbidden" }, 403);
+    const parsed = clickSchema.safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Invalid click" }, 400);
+    const input = parsed.data;
+    const selection = await c.env.DB.prepare(
+      "SELECT o.id AS offer_id, o.destination_url, o.metadata_json FROM domains d JOIN routing_policies rp ON (rp.domain_id=d.id OR rp.domain_id IS NULL) JOIN offers o ON o.id=rp.offer_id WHERE d.id=? AND d.active_release_id=? AND d.lifecycle_status='published' AND rp.status='active' AND o.status='active' AND (rp.vertical IS NULL OR rp.vertical=d.vertical) AND (rp.country IS NULL OR rp.country=d.country) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) ORDER BY CASE WHEN rp.domain_id=d.id THEN 0 ELSE 1 END, rp.priority ASC, rp.weight DESC LIMIT 1",
+    ).bind(input.domainId, input.releaseId, nowIso(), nowIso()).first<OfferSelection>();
+    if (!selection) return c.json({ error: "No eligible offer" }, 404);
+    const destination = new URL(selection.destination_url);
+    if (destination.protocol !== "https:") return c.json({ error: "Unsafe offer destination" }, 500);
+    const clickId = randomId("clk");
+    const metadata = jsonValue<{ clickIdParam?: string }>(selection.metadata_json, {});
+    const clickIdParam = metadata.clickIdParam && /^[a-zA-Z0-9_-]{1,32}$/.test(metadata.clickIdParam) ? metadata.clickIdParam : "subid";
+    destination.searchParams.set(clickIdParam, clickId);
+    await c.env.DB.prepare("INSERT INTO clicks (id, domain_id, release_id, offer_id, slot, visitor_id_hash, likely_human, country, user_agent_class, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(clickId, input.domainId, input.releaseId, selection.offer_id, input.slot, input.visitorIdHash, input.likelyHuman === null ? null : input.likelyHuman ? 1 : 0, input.country, input.userAgentClass, nowIso()).run();
+    return c.json({ destinationUrl: destination.toString(), clickId });
+  });
+}
+
+const runnerCompletionSchema = z.object({ content: contentSchema });
+
+function runnerAuthorized(header: string | undefined, secret: string | undefined): boolean {
+  return Boolean(header && secret && timingSafeEqualString(header, secret));
+}
+
+export function mountRunner(app: App): void {
+  app.post("/runner/claim", async (c) => {
+    if (!runnerAuthorized(c.req.header("X-DM-Runner-Secret"), c.env.CODEX_RUNNER_SECRET)) return c.json({ error: "Forbidden" }, 403);
+    const timestamp = nowIso();
+    const staleBefore = new Date(Date.now() - 30 * 60_000).toISOString();
+    await c.env.DB.prepare("UPDATE jobs SET status=CASE WHEN attempts>=3 THEN 'failed' ELSE 'queued' END, error_message=CASE WHEN attempts>=3 THEN 'Runner lease expired after final attempt' ELSE 'Runner lease expired; retrying' END, locked_at=NULL, not_before=CASE WHEN attempts>=3 THEN NULL ELSE ? END, updated_at=? WHERE status='running' AND locked_at<?")
+      .bind(timestamp, timestamp, staleBefore).run();
+    const job = await c.env.DB.prepare("UPDATE jobs SET status='running', attempts=attempts+1, locked_at=?, updated_at=? WHERE id=(SELECT id FROM jobs WHERE status='queued' AND (not_before IS NULL OR not_before<=?) ORDER BY created_at LIMIT 1) RETURNING id, job_type, input_json, attempts")
+      .bind(timestamp, timestamp, timestamp).first();
+    return job ? c.json({ job }) : c.json({ job: null });
+  });
+
+  app.post("/runner/:id/complete", async (c) => {
+    if (!runnerAuthorized(c.req.header("X-DM-Runner-Secret"), c.env.CODEX_RUNNER_SECRET)) return c.json({ error: "Forbidden" }, 403);
+    const parsed = runnerCompletionSchema.safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!parsed.success) return c.json(zodError(parsed.error), 400);
+    const job = await c.env.DB.prepare("SELECT * FROM jobs WHERE id=? AND status='running'").bind(c.req.param("id")).first<{ id: string; input_json: string }>();
+    if (!job) return c.json({ error: "Running job not found" }, 404);
+    const input = jsonValue<{ domain?: { id?: string } }>(job.input_json, {});
+    const domainId = input.domain?.id;
+    if (!domainId) return c.json({ error: "Job has no domain" }, 409);
+    const serialized = JSON.stringify(parsed.data.content);
+    const contentId = randomId("cnt");
+    const version = await nextVersion(c.env.DB, "content_versions", domainId);
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("INSERT INTO content_versions (id, domain_id, version, content_json, content_sha256, provenance, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, 'codex', 'draft', 'codex-runner', ?)")
+        .bind(contentId, domainId, version, serialized, await sha256Hex(serialized), timestamp),
+      c.env.DB.prepare("UPDATE jobs SET status='succeeded', output_json=?, updated_at=? WHERE id=? AND status='running'").bind(JSON.stringify({ contentId, version }), timestamp, job.id),
+      auditStatement(c.env.DB, { actor: "codex-runner", action: "content.generate", entityType: "content", entityId: contentId, after: { domainId, version, jobId: job.id } }),
+    ]);
+    return c.json({ contentId, version, status: "draft" });
+  });
+
+  app.post("/runner/:id/fail", async (c) => {
+    if (!runnerAuthorized(c.req.header("X-DM-Runner-Secret"), c.env.CODEX_RUNNER_SECRET)) return c.json({ error: "Forbidden" }, 403);
+    const body = z.object({ error: z.string().min(1).max(1000), retry: z.boolean().default(false) }).safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!body.success) return c.json(zodError(body.error), 400);
+    const timestamp = nowIso();
+    const notBefore = body.data.retry ? new Date(Date.now() + 5 * 60_000).toISOString() : null;
+    const status = body.data.retry ? "queued" : "failed";
+    const result = await c.env.DB.prepare("UPDATE jobs SET status=?, error_message=?, not_before=?, locked_at=NULL, updated_at=? WHERE id=? AND status='running'")
+      .bind(status, body.data.error, notBefore, timestamp, c.req.param("id")).run();
+    if (!result.meta.changes) return c.json({ error: "Running job not found" }, 404);
+    return c.json({ id: c.req.param("id"), status });
+  });
+}
