@@ -5,13 +5,30 @@ import type { Env, Variables } from "./types";
 
 const jwksByTeam = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
+function teamIssuer(teamDomain: string): string {
+  return `https://${teamDomain.replace(/^https?:\/\//, "").replace(/\/$/, "")}`;
+}
+
 function remoteKeys(teamDomain: string): ReturnType<typeof createRemoteJWKSet> {
-  const normalized = teamDomain.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const existing = jwksByTeam.get(normalized);
+  const issuer = teamIssuer(teamDomain);
+  const existing = jwksByTeam.get(issuer);
   if (existing) return existing;
-  const keys = createRemoteJWKSet(new URL(`https://${normalized}/cdn-cgi/access/certs`));
-  jwksByTeam.set(normalized, keys);
+  const keys = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+  jwksByTeam.set(issuer, keys);
   return keys;
+}
+
+export function accessAssertionFromHeaders(headers: Headers): string {
+  const assertion = headers.get("Cf-Access-Jwt-Assertion")?.trim();
+  if (assertion) return assertion;
+
+  const cookies = headers.get("Cookie") ?? "";
+  for (const part of cookies.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0 || part.slice(0, separator).trim() !== "CF_Authorization") continue;
+    return part.slice(separator + 1).trim();
+  }
+  return "";
 }
 
 export async function requireAdmin(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next): Promise<Response | void> {
@@ -27,10 +44,13 @@ export async function requireAdmin(c: Context<{ Bindings: Env; Variables: Variab
     c.set("authMethod", "operator-token");
     return next();
   }
-  const assertion = c.req.header("Cf-Access-Jwt-Assertion");
+  const assertion = accessAssertionFromHeaders(c.req.raw.headers);
   if (!assertion || !c.env.ACCESS_TEAM_DOMAIN || !c.env.ACCESS_AUD) return c.json({ error: "Access authentication required" }, 401);
   try {
-    const verified = await jwtVerify(assertion, remoteKeys(c.env.ACCESS_TEAM_DOMAIN), { audience: c.env.ACCESS_AUD });
+    const verified = await jwtVerify(assertion, remoteKeys(c.env.ACCESS_TEAM_DOMAIN), {
+      audience: c.env.ACCESS_AUD,
+      issuer: teamIssuer(c.env.ACCESS_TEAM_DOMAIN),
+    });
     const email = typeof verified.payload.email === "string" ? verified.payload.email.toLowerCase() : "";
     if (email !== c.env.ALLOWED_ADMIN_EMAIL.toLowerCase()) return c.json({ error: "Forbidden" }, 403);
     c.set("actor", email);
