@@ -86,7 +86,7 @@ export function compileHomeServicesHtml(input: {
 <html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${e(content.seo.title)}</title><meta name="description" content="${e(content.seo.description)}">
 <meta name="theme-color" content="#0b202a">
-<link rel="canonical" href="https://${e(hostname)}/"><link rel="icon" href="/__dm/assets/site-mark.svg?v=${e(releaseId)}" type="image/svg+xml"><link rel="stylesheet" href="/__dm/site.css?v=${e(releaseId)}">
+<link rel="canonical" href="https://${e(hostname)}/"><link rel="icon" href="/__dm/assets/site-mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/__dm/site-v2.css">
 </head><body data-release="${e(releaseId)}" data-vertical="${e(verticalSlug(content.vertical))}" data-offer="${offerEnabled ? "enabled" : "disabled"}">
 <header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(brand)} home"><span class="brand-mark" aria-hidden="true"></span><span>${e(brand)}</span></a>${headerAction}</div></header>
 <main>
@@ -98,11 +98,11 @@ export function compileHomeServicesHtml(input: {
 <section class="final" data-reveal><div class="final-inner"><div><p class="eyebrow">${offerEnabled ? "Your next step" : "Coverage update"}</p><h2>${offerEnabled ? `Ready to explore ${e(content.vertical.toLowerCase())} options in ${locationText}?` : `We're building a better way to find ${e(content.vertical.toLowerCase())} help in ${locationText}.`}</h2></div>${action}</div></section>
 </main>
 <footer><div class="footer-brand"><span class="brand-mark" aria-hidden="true"></span><strong>${e(brand)}</strong></div><p>${e(content.disclosure)}</p><p class="copyright">&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
-${mobileAction}<script src="/__dm/site.js?v=${e(releaseId)}" defer></script></body></html>`;
+${mobileAction}<script src="/__dm/site-v2.js" defer></script></body></html>`;
 }
 
 export function pausedHtml(hostname: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Temporarily unavailable</title><link rel="stylesheet" href="/__dm/site.css"></head><body class="system-page"><main><h1>Temporarily unavailable</h1><p>${escapeHtml(hostname)} is being updated. Please check back soon.</p></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Temporarily unavailable</title><link rel="stylesheet" href="/__dm/site-v2.css"></head><body class="system-page"><main><h1>Temporarily unavailable</h1><p>${escapeHtml(hostname)} is being updated. Please check back soon.</p></main></body></html>`;
 }
 
 export function publicSnapshot(snapshot: ReleaseSnapshot): Omit<ReleaseSnapshot, "content"> {

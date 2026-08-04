@@ -42,10 +42,10 @@ describe("core contracts", () => {
     expect(html).toContain('data-offer="enabled"');
     expect(html).toContain('class="mobile-action"');
     expect(html).toContain('href="/go/primary"');
-    expect(html).toContain('href="/__dm/site.css?v=rel_1"');
-    expect(html).toContain('href="/__dm/assets/site-mark.svg?v=rel_1"');
+    expect(html).toContain('href="/__dm/site-v2.css"');
+    expect(html).toContain('href="/__dm/assets/site-mark.svg"');
     expect(html).toContain('srcset="/__dm/assets/home-services-hero-960.webp 960w, /__dm/assets/home-services-hero.webp 1122w"');
-    expect(html).toContain('src="/__dm/site.js?v=rel_1"');
+    expect(html).toContain('src="/__dm/site-v2.js"');
     expect(html).not.toContain("<script>");
   });
 
