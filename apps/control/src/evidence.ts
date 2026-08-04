@@ -6,6 +6,7 @@ export interface EvidenceInputs {
   rollupCoverageComplete: boolean;
   allTenantsReady: boolean;
   allTenantsReliable: boolean;
+  telemetryPipelineVerified: boolean;
   sessionSamplingDetected: boolean;
   qualifiedSessions: number;
   minimumQualifiedSessions: number;
@@ -22,6 +23,7 @@ export function decideEvidence(inputs: EvidenceInputs): EvidenceDecision {
     ...(!inputs.rollupCoverageComplete ? ["rollup_coverage"] : []),
     ...(!inputs.allTenantsReady ? ["tenant_readiness"] : []),
     ...(!inputs.allTenantsReliable ? ["tenant_reliability"] : []),
+    ...(!inputs.telemetryPipelineVerified ? ["telemetry_pipeline"] : []),
     ...(inputs.sessionSamplingDetected ? ["qualified_session_sampling"] : []),
     ...(inputs.observedFullDays >= inputs.minimumReviewDays && inputs.qualifiedSessions < inputs.minimumQualifiedSessions ? ["qualified_sessions"] : []),
   ];

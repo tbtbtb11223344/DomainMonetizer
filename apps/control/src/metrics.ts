@@ -50,12 +50,29 @@ interface SourceRow {
   max_sample_interval: string | number;
 }
 
+interface CanaryRow {
+  domain_id: string;
+  metric_date: string;
+  observed_canaries: string | number;
+  max_sample_interval: string | number;
+}
+
+interface ExpectedCanaryRow {
+  domain_id: string;
+  expected_canaries: string | number;
+}
+
 export interface RollupResult {
   skipped: boolean;
   metricDate: string;
   domainRows: number;
   countryRows: number;
   sourceRows: number;
+  canaryRows: number;
+  expectedCanaries: number;
+  observedCanaries: number;
+  canarySampleInterval: number;
+  telemetryVerified: boolean;
   maxSampleInterval: number;
   uniqueSampleInterval: number;
 }
@@ -163,18 +180,18 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
   await env.DB.prepare("INSERT INTO analytics_rollup_runs (id, metric_date, status, started_at) VALUES (?, ?, 'running', ?)")
     .bind(runId, metricDate, startedAt).run();
 
-  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, sourceRows: number, maxSampleInterval: number, uniqueSampleInterval: number, error?: string) => {
-    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, source_rows=?, max_sample_interval=?, unique_sample_interval=?, error_message=?, completed_at=? WHERE id=?")
-      .bind(status, domainRows, countryRows, sourceRows, maxSampleInterval, uniqueSampleInterval, error ?? null, nowIso(), runId).run();
+  const finish = async (status: "succeeded" | "skipped" | "failed", domainRows: number, countryRows: number, sourceRows: number, canaryRows: number, expectedCanaries: number, observedCanaries: number, canarySampleInterval: number, telemetryVerified: boolean, maxSampleInterval: number, uniqueSampleInterval: number, error?: string) => {
+    await env.DB.prepare("UPDATE analytics_rollup_runs SET status=?, domain_rows=?, country_rows=?, source_rows=?, canary_rows=?, expected_canaries=?, observed_canaries=?, canary_sample_interval=?, telemetry_verified=?, max_sample_interval=?, unique_sample_interval=?, error_message=?, completed_at=? WHERE id=?")
+      .bind(status, domainRows, countryRows, sourceRows, canaryRows, expectedCanaries, observedCanaries, canarySampleInterval, telemetryVerified ? 1 : 0, maxSampleInterval, uniqueSampleInterval, error ?? null, nowIso(), runId).run();
   };
 
   if (!env.CLOUDFLARE_ACCOUNT_ID || !env.ANALYTICS_READ_TOKEN) {
-    await finish("skipped", 0, 0, 0, 1, 1, "Analytics credentials are not configured");
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 };
+    await finish("skipped", 0, 0, 0, 0, 0, 0, 1, false, 1, 1, "Analytics credentials are not configured");
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, canaryRows: 0, expectedCanaries: 0, observedCanaries: 0, canarySampleInterval: 1, telemetryVerified: false, maxSampleInterval: 1, uniqueSampleInterval: 1 };
   }
   if (env.TELEMETRY_MIN_DATE && metricDate < env.TELEMETRY_MIN_DATE) {
-    await finish("skipped", 0, 0, 0, 1, 1, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
-    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 };
+    await finish("skipped", 0, 0, 0, 0, 0, 0, 1, false, 1, 1, `Before clean telemetry boundary ${env.TELEMETRY_MIN_DATE}`);
+    return { skipped: true, metricDate, domainRows: 0, countryRows: 0, sourceRows: 0, canaryRows: 0, expectedCanaries: 0, observedCanaries: 0, canarySampleInterval: 1, telemetryVerified: false, maxSampleInterval: 1, uniqueSampleInterval: 1 };
   }
 
   const start = `${metricDate} 00:00:00`;
@@ -185,16 +202,21 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
   const where = `timestamp >= toDateTime(${sqlString(start)}) AND timestamp < toDateTime(${sqlString(end)}) AND blob2 != ${sqlString(preview)}`;
 
   try {
-    const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} GROUP BY index1, metric_date`;
+    const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged', 'click') GROUP BY index1, metric_date`;
     const uniquesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`;
-    const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} GROUP BY index1, metric_date, country`;
+    const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, country`;
     const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
-    const [metricRows, uniqueRows, countryRows, sourceRows] = await Promise.all([
+    const canariesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS observed_canaries, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1, metric_date`;
+    const [metricRows, uniqueRows, countryRows, sourceRows, canaryRows] = await Promise.all([
       queryAnalytics<MetricRow>(env, metricsSql),
       queryAnalytics<UniqueRow>(env, uniquesSql),
       queryAnalytics<CountryRow>(env, countriesSql),
       queryAnalytics<SourceRow>(env, sourcesSql),
+      queryAnalytics<CanaryRow>(env, canariesSql),
     ]);
+    const expectedRows = await env.DB.prepare(
+      "SELECT d.id AS domain_id,COUNT(h.id) AS expected_canaries FROM domains d LEFT JOIN tenant_health_checks h ON h.domain_id=d.id AND h.check_source='scheduled' AND h.checked_at>=? AND h.checked_at<? WHERE d.lifecycle_status='published' GROUP BY d.id",
+    ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
     const sampleByDomain = new Map<string, number>();
     for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows]) {
@@ -204,12 +226,24 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     const uniqueSampleByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.max_sample_interval) || 1]));
     const maxSampleInterval = Math.max(1, ...sampleByDomain.values());
     const uniqueSampleInterval = Math.max(1, ...uniqueSampleByDomain.values());
+    const expectedByDomain = new Map(expectedRows.results.map((row) => [row.domain_id, integer(row.expected_canaries)]));
+    const observedByDomain = new Map(canaryRows.map((row) => [row.domain_id, integer(row.observed_canaries)]));
+    const canarySampleByDomain = new Map(canaryRows.map((row) => [row.domain_id, integer(row.max_sample_interval) || 1]));
+    const canaryDomainIds = new Set([...expectedByDomain.keys(), ...observedByDomain.keys()]);
+    const expectedCanaries = [...expectedByDomain.values()].reduce((sum, count) => sum + count, 0);
+    const observedCanaries = [...observedByDomain.values()].reduce((sum, count) => sum + count, 0);
+    const canarySampleInterval = Math.max(1, ...canarySampleByDomain.values());
+    const telemetryVerified = canaryDomainIds.size > 0 && [...canaryDomainIds].every((domainId) => {
+      const expected = expectedByDomain.get(domainId) ?? 0;
+      return expected > 0 && observedByDomain.get(domainId) === expected && (canarySampleByDomain.get(domainId) ?? 1) === 1;
+    });
     const timestamp = nowIso();
     const statements: D1PreparedStatement[] = [
       env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=2, updated_at=? WHERE metric_date=?")
         .bind(timestamp, metricDate),
       env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
+      env.DB.prepare("DELETE FROM daily_domain_telemetry_health WHERE metric_date=?").bind(metricDate),
     ];
     for (const row of metricRows) {
       statements.push(
@@ -249,12 +283,22 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
           .bind(row.domain_id, row.metric_date, visitorClass, reason, country, integer(row.asn), asOrg, integer(row.views), integer(row.engaged_visits), timestamp),
       );
     }
+    for (const domainId of canaryDomainIds) {
+      const expected = expectedByDomain.get(domainId) ?? 0;
+      const observed = observedByDomain.get(domainId) ?? 0;
+      const sampleInterval = canarySampleByDomain.get(domainId) ?? 1;
+      const verified = expected > 0 && observed === expected && sampleInterval === 1;
+      statements.push(
+        env.DB.prepare("INSERT INTO daily_domain_telemetry_health (domain_id,metric_date,expected_canaries,observed_canaries,canary_sample_interval,verified,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(domain_id,metric_date) DO UPDATE SET expected_canaries=excluded.expected_canaries,observed_canaries=excluded.observed_canaries,canary_sample_interval=excluded.canary_sample_interval,verified=excluded.verified,updated_at=excluded.updated_at")
+          .bind(domainId, metricDate, expected, observed, sampleInterval, verified ? 1 : 0, timestamp),
+      );
+    }
     await env.DB.batch(statements);
-    await finish("succeeded", metricRows.length, countryRows.length, sourceRows.length, maxSampleInterval, uniqueSampleInterval);
-    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length, sourceRows: sourceRows.length, maxSampleInterval, uniqueSampleInterval };
+    await finish("succeeded", metricRows.length, countryRows.length, sourceRows.length, canaryRows.length, expectedCanaries, observedCanaries, canarySampleInterval, telemetryVerified, maxSampleInterval, uniqueSampleInterval);
+    return { skipped: false, metricDate, domainRows: metricRows.length, countryRows: countryRows.length, sourceRows: sourceRows.length, canaryRows: canaryRows.length, expectedCanaries, observedCanaries, canarySampleInterval, telemetryVerified, maxSampleInterval, uniqueSampleInterval };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown analytics rollup failure";
-    await finish("failed", 0, 0, 0, 1, 1, message.slice(0, 500)).catch(() => undefined);
+    await finish("failed", 0, 0, 0, 0, 0, 0, 1, false, 1, 1, message.slice(0, 500)).catch(() => undefined);
     throw error;
   }
 }

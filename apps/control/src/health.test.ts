@@ -59,23 +59,29 @@ describe("tenant health checks", () => {
       { id: "dom_down", hostname: "down.example", active_release_id: "rel_down" },
     ];
     const { db, batches } = fakeDatabase(domains);
-    const request = vi.fn(async (input: RequestInfo | URL) => {
+    const request = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes("ready.example")) return Response.json({ ok: true, hostname: "ready.example", state: "live", releaseId: "rel_ready" });
       if (url.includes("stale.example")) return Response.json({ ok: true, hostname: "stale.example", state: "live", releaseId: "rel_old" });
       throw new Error("DNS lookup failed");
     });
 
-    const result = await checkPublishedTenants({ DB: db }, new Date("2026-08-05T00:47:00.000Z"), request as typeof fetch, "scheduled");
+    const result = await checkPublishedTenants({ DB: db, CONTROL_SHARED_SECRET: "control-secret" }, new Date("2026-08-05T00:47:00.000Z"), request as typeof fetch, "scheduled");
 
     expect(result).toMatchObject({ checked: 3, ready: 1, notReady: 1, unreachable: 1, truncated: false, checkSource: "scheduled" });
     expect(request).toHaveBeenCalledTimes(3);
     expect(request.mock.calls.every((call) => String(call[0]).endsWith("/readyz"))).toBe(true);
+    const readinessHeaders = new Headers(request.mock.calls[0]![1]?.headers);
+    expect(readinessHeaders.get("X-DM-Health-Secret")).toBeNull();
+    expect(readinessHeaders.get("X-DM-Health-Signature")).toMatch(/^[a-f0-9]{64}$/);
+    expect(readinessHeaders.get("X-DM-Health-Source")).toBe("scheduled");
+    expect(readinessHeaders.get("X-DM-Health-Id")).toMatch(/^health_[a-f0-9]{32}$/);
     expect(batches).toHaveLength(1);
     expect(batches[0]).toHaveLength(4);
     expect(batches[0]![0]!.sql).toContain("DELETE FROM tenant_health_checks");
     const inserts = batches[0]!.slice(1);
     expect(inserts.map((statement) => statement.args[2])).toEqual(["ready", "not_ready", "unreachable"]);
+    expect(inserts.map((statement) => statement.args[0])).toEqual(result.results.map((item) => item.checkId));
     expect(inserts.every((statement) => statement.args.at(-1) === "scheduled")).toBe(true);
     expect(inserts[0]!.sql).toContain("ON CONFLICT(domain_id,checked_at)");
     expect(inserts[1]!.args).toEqual(expect.arrayContaining(["rel_new", "rel_old"]));
@@ -112,13 +118,13 @@ describe("tenant health checks", () => {
       active_release_id: `rel_${index}`,
     }));
     const { db } = fakeDatabase(domains);
-    const request = vi.fn(async (input: RequestInfo | URL) => {
+    const request = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const hostname = new URL(String(input)).hostname;
       const index = hostname.match(/domain-(\d+)/)?.[1];
       return Response.json({ ok: true, hostname, state: "live", releaseId: `rel_${index}` });
     });
 
-    const result = await checkPublishedTenants({ DB: db }, new Date("2026-08-05T00:47:00.000Z"), request as typeof fetch);
+    const result = await checkPublishedTenants({ DB: db, CONTROL_SHARED_SECRET: "control-secret" }, new Date("2026-08-05T00:47:00.000Z"), request as typeof fetch);
 
     expect(result.checked).toBe(HEALTH_CHECK_LIMIT);
     expect(result.ready).toBe(HEALTH_CHECK_LIMIT);

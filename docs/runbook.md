@@ -55,6 +55,8 @@ The analytics rollup runs at `04:17 UTC`. It compares D1 with every completed UT
 
 Tenant readiness runs at `00:47`, `06:47`, `12:47`, and `18:47 UTC`. It checks up to 20 published domains through their public `/readyz` endpoint, requires the exact active release ID, and stores 90 days of results. Scheduled checks are labeled separately from operator-triggered checks and are idempotent for a domain/timestamp. The pilot must never exceed 20 published domains without replacing this bounded monitor with queued or cursor-batched work. A check is fresh for eight hours; stale, unchecked, unreachable, non-200, or release-mismatched tenants block scale review. After completed clean days exist, every tenant must also have at least 95% scheduled-check coverage and 95% ready scheduled checks. Manual checks can restore current readiness but cannot inflate historical reliability.
 
+Every authenticated readiness request also writes a non-visitor `health_canary` event carrying the same unique check ID. The daily rollup compares scheduled D1 check IDs with distinct Analytics Engine canaries per tenant. `telemetry.pipelineVerified` is true only when every completed day has exact, unsampled canary coverage. Canary events are explicitly excluded from view, engagement, click, country, source, and qualified-session queries. A successful zero-traffic rollup is decision-grade only when this canary gate is also verified.
+
 An authenticated operator can run the same safe check immediately. It creates no visitor telemetry:
 
 ```powershell
@@ -69,7 +71,7 @@ $headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Clien
 Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/metrics/rollup -Headers $headers -Body '{"date":"2026-08-05"}'
 ```
 
-Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Confirm `sampling.exactQualifiedSessions=true` before treating qualified sessions as exact; `sampling.detected=true` by itself means one or more weighted quality breakdowns were sampled, not that the distinct-session count was sampled. Do not interpret zero displayed traffic until the latest completed-day run is confirmed successful.
+Review `/api/metrics/overview` or the admin inspector after the run. `latestCompletedDate` is the coverage target; `rollupThrough` alone is not proof of completeness. A failed or missing rollup is an operational defect, keeps `rollupCoverageComplete=false`, and is retried by the next schedule. Confirm `telemetry.pipelineVerified=true` and `sampling.exactQualifiedSessions=true` before treating zero traffic or qualified sessions as exact. `sampling.detected=true` by itself means one or more weighted quality breakdowns were sampled, not that the distinct-session count was sampled. Do not interpret zero displayed traffic until both the latest completed-day run and its canary reconciliation are confirmed successful.
 
 For traffic quality, inspect each domain's `sourceMetrics` in `/api/domains/:hostname` or the **Traffic quality** section in the admin inspector. A browser-navigation classification is evidence, not proof by itself: review its country, ASN organization, engagement, and concentration. Hosting, cloud, research, or unexpected-country networks should be investigated before counting the traffic as commercially useful.
 

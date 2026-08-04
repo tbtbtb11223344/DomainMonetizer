@@ -1,4 +1,4 @@
-import { compileHomeServicesHtml, contentSchema, releaseSnapshotSchema } from "@domain-monetizer/core";
+import { compileHomeServicesHtml, contentSchema, hmacSha256Hex, releaseSnapshotSchema } from "@domain-monetizer/core";
 import { describe, expect, it } from "vitest";
 import worker from "./index";
 
@@ -151,6 +151,48 @@ describe("site edge", () => {
     expect(readyPayload).toEqual({ ok: true, service: "site-edge", hostname: "pilot-example.com", state: "live", releaseId: "rel_test" });
     expect(ready.headers.get("Cache-Control")).toBe("no-store");
     expect(ready.headers.get("Set-Cookie")).toBeNull();
+    expect(events).toHaveLength(0);
+  });
+
+  it("records an authenticated readiness canary without creating visitor traffic", async () => {
+    const { env, events } = environment();
+    const checkId = `health_${"a".repeat(32)}`;
+    const signature = await hmacSha256Hex("test-secret", `${checkId}:scheduled:pilot-example.com`);
+    const response = await worker.fetch(new Request("https://pilot-example.com/readyz", {
+      headers: {
+        "X-DM-Health-Id": checkId,
+        "X-DM-Health-Source": "scheduled",
+        "X-DM-Health-Signature": signature,
+      },
+    }), env as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(events).toHaveLength(1);
+    const point = events[0] as { blobs: string[] };
+    expect(point.blobs[0]).toBe("health_canary");
+    expect(point.blobs[3]).toBe("unknown");
+    expect(point.blobs[6]).toBe(checkId);
+    expect(point.blobs[7]).toBe("health_scheduled");
+  });
+
+  it("ignores forged or malformed readiness canaries", async () => {
+    const { env, events } = environment();
+    await worker.fetch(new Request("https://pilot-example.com/readyz", {
+      headers: {
+        "X-DM-Health-Id": `health_${"b".repeat(32)}`,
+        "X-DM-Health-Source": "scheduled",
+        "X-DM-Health-Signature": await hmacSha256Hex("wrong-secret", `health_${"b".repeat(32)}:scheduled:pilot-example.com`),
+      },
+    }), env as never);
+    await worker.fetch(new Request("https://pilot-example.com/readyz", {
+      headers: {
+        "X-DM-Health-Id": "not-a-health-id",
+        "X-DM-Health-Source": "scheduled",
+        "X-DM-Health-Signature": await hmacSha256Hex("test-secret", "not-a-health-id:scheduled:pilot-example.com"),
+      },
+    }), env as never);
+
     expect(events).toHaveLength(0);
   });
 

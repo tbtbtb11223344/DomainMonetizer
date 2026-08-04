@@ -1,9 +1,11 @@
 import {
   activePointerKey,
   canonicalHostname,
+  hmacSha256Hex,
   releaseKey,
   releaseSnapshotSchema,
   sha256Hex,
+  timingSafeEqualString,
   type ReleaseSnapshot,
 } from "@domain-monetizer/core";
 
@@ -103,6 +105,24 @@ function eventPoint(
   };
 }
 
+async function writeHealthCanary(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<void> {
+  if (request.method !== "GET") return;
+  const signature = request.headers.get("X-DM-Health-Signature") ?? "";
+  const checkId = request.headers.get("X-DM-Health-Id") ?? "";
+  const source = request.headers.get("X-DM-Health-Source") ?? "";
+  if (!signature || !env.CONTROL_SHARED_SECRET) return;
+  if (!/^health_[a-f0-9]{32}$/.test(checkId) || (source !== "manual" && source !== "scheduled")) return;
+  const expected = await hmacSha256Hex(env.CONTROL_SHARED_SECRET, `${checkId}:${source}:${snapshot.hostname}`);
+  if (!timingSafeEqualString(signature, expected)) return;
+  env.EVENTS.writeDataPoint(eventPoint(
+    request,
+    snapshot,
+    "health_canary",
+    { visitorClass: "unknown", reason: `health_${source}`, botScore: null },
+    checkId,
+  ));
+}
+
 async function loadSnapshot(hostname: string, env: Env): Promise<ReleaseSnapshot | null> {
   const pointer = await env.SITE_CONFIG.get(activePointerKey(hostname));
   if (!pointer) return null;
@@ -190,6 +210,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
   }
   const snapshot = await loadSnapshot(hostname, env).catch(() => null);
   if (url.pathname === "/readyz") {
+    if (snapshot) await writeHealthCanary(request, snapshot, env);
     const live = snapshot?.state === "live";
     const payload = snapshot
       ? { ok: live, service: "site-edge", hostname, state: snapshot.state, releaseId: snapshot.releaseId }

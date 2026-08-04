@@ -123,8 +123,18 @@ export interface MetricsOverview {
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];
   sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean };
+  telemetry: { pipelineVerified: boolean; verifiedDays: number; expectedDays: number };
   reviewBlockers: string[];
-  latestRun: { metric_date: string; status: string; error_message: string | null; completed_at: string | null } | null;
+  latestRun: { metric_date: string; status: string; expected_canaries: number; observed_canaries: number; canary_sample_interval: number; telemetry_verified: number; error_message: string | null; completed_at: string | null } | null;
+}
+
+export interface TelemetryHealthDay {
+  metric_date: string;
+  expected_canaries: number;
+  observed_canaries: number;
+  canary_sample_interval: number;
+  verified: number;
+  updated_at: string;
 }
 
 export interface DomainDetail {
@@ -134,6 +144,7 @@ export interface DomainDetail {
   metrics: MetricDay[];
   countryMetrics: CountryMetric[];
   sourceMetrics: SourceMetric[];
+  telemetryHealth: TelemetryHealthDay[];
   healthChecks: TenantHealthCheck[];
 }
 

@@ -1,4 +1,4 @@
-import { randomId } from "@domain-monetizer/core";
+import { hmacSha256Hex, sha256Hex } from "@domain-monetizer/core";
 import type { Env } from "./types";
 
 export const HEALTH_CHECK_LIMIT = 20;
@@ -26,6 +26,7 @@ export type TenantHealthStatus = "ready" | "not_ready" | "unreachable";
 export type HealthCheckSource = "manual" | "scheduled";
 
 export interface TenantHealthResult {
+  checkId: string;
   domainId: string;
   hostname: string;
   status: TenantHealthStatus;
@@ -168,13 +169,23 @@ async function checkDomain(
   domain: HealthDomain,
   checkedAt: string,
   request: typeof fetch,
+  sharedSecret: string,
+  checkSource: HealthCheckSource,
 ): Promise<TenantHealthResult> {
+  const checkId = `health_${(await sha256Hex(`${domain.id}:${checkedAt}:${checkSource}`)).slice(0, 32)}`;
+  const signature = await hmacSha256Hex(sharedSecret, `${checkId}:${checkSource}:${domain.hostname}`);
   const started = Date.now();
   try {
     const response = await request(`https://${domain.hostname}/readyz`, {
       method: "GET",
       redirect: "manual",
-      headers: { Accept: "application/json", "User-Agent": "DomainMonetizer-Health/1.0" },
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "DomainMonetizer-Health/1.0",
+        "X-DM-Health-Id": checkId,
+        "X-DM-Health-Source": checkSource,
+        "X-DM-Health-Signature": signature,
+      },
       signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
     });
     const payload: ReadinessPayload = await response.json<ReadinessPayload>().catch((): ReadinessPayload => ({}));
@@ -185,6 +196,7 @@ async function checkDomain(
       && payload.hostname === domain.hostname
       && observedReleaseId === domain.active_release_id;
     return {
+      checkId,
       domainId: domain.id,
       hostname: domain.hostname,
       status: exact ? "ready" : "not_ready",
@@ -199,6 +211,7 @@ async function checkDomain(
     };
   } catch (error) {
     return {
+      checkId,
       domainId: domain.id,
       hostname: domain.hostname,
       status: "unreachable",
@@ -226,7 +239,7 @@ async function mapBounded<T, R>(items: T[], concurrency: number, mapper: (item: 
 }
 
 export async function checkPublishedTenants(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB" | "CONTROL_SHARED_SECRET">,
   now = new Date(),
   request: typeof fetch = fetch,
   checkSource: HealthCheckSource = "manual",
@@ -237,7 +250,7 @@ export async function checkPublishedTenants(
   ).bind(HEALTH_CHECK_LIMIT + 1).all<HealthDomain>();
   const truncated = query.results.length > HEALTH_CHECK_LIMIT;
   const domains = query.results.slice(0, HEALTH_CHECK_LIMIT);
-  const results = await mapBounded(domains, HEALTH_CHECK_CONCURRENCY, (domain) => checkDomain(domain, checkedAt, request));
+  const results = await mapBounded(domains, HEALTH_CHECK_CONCURRENCY, (domain) => checkDomain(domain, checkedAt, request, env.CONTROL_SHARED_SECRET, checkSource));
   const retentionBoundary = new Date(now.getTime() - HEALTH_RETENTION_MS).toISOString();
   const statements = [env.DB.prepare("DELETE FROM tenant_health_checks WHERE checked_at<?").bind(retentionBoundary)];
   for (const result of results) {
@@ -245,7 +258,7 @@ export async function checkPublishedTenants(
       env.DB.prepare(
         "INSERT INTO tenant_health_checks (id,domain_id,status,http_status,latency_ms,expected_release_id,observed_release_id,error_message,checked_at,check_source) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(domain_id,checked_at) DO UPDATE SET status=excluded.status,http_status=excluded.http_status,latency_ms=excluded.latency_ms,expected_release_id=excluded.expected_release_id,observed_release_id=excluded.observed_release_id,error_message=excluded.error_message,check_source=excluded.check_source",
       ).bind(
-        randomId("health"),
+        result.checkId,
         result.domainId,
         result.status,
         result.httpStatus,
