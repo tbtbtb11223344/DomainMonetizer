@@ -11,7 +11,10 @@ const baseUrl = (process.env.CONTROL_URL || "https://admin.multibrands.net").rep
 const secret = process.env.CODEX_RUNNER_SECRET;
 const codexBin = process.env.CODEX_BIN || "codex";
 const model = process.env.CODEX_MODEL || "gpt-5.6-terra";
-const pollMs = Math.max(5, Number(process.env.RUNNER_POLL_SECONDS || 15)) * 1000;
+const configuredPollSeconds = Number(process.env.RUNNER_POLL_SECONDS || 15);
+const configuredTimeoutSeconds = Number(process.env.CODEX_TIMEOUT_SECONDS || 1200);
+const pollMs = (Number.isFinite(configuredPollSeconds) ? Math.max(5, configuredPollSeconds) : 15) * 1000;
+const timeoutMs = (Number.isFinite(configuredTimeoutSeconds) ? Math.min(3600, Math.max(60, configuredTimeoutSeconds)) : 1200) * 1000;
 
 if (!secret) throw new Error("CODEX_RUNNER_SECRET is required");
 if (!/^[a-zA-Z0-9._-]{1,80}$/.test(model)) throw new Error("CODEX_MODEL is invalid");
@@ -71,10 +74,23 @@ async function executeCodex(prompt, outputPath) {
     const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", codexBin.endsWith(".cmd") ? codexBin : `${codexBin}.cmd`, ...args] : args;
     const child = spawn(command, commandArgs, { stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
     let stderr = "";
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      if (process.platform === "win32" && child.pid) {
+        spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+      } else {
+        child.kill("SIGKILL");
+      }
+    }, timeoutMs);
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-4000); });
-    child.on("error", reject);
-    child.on("close", (code) => code === 0 ? resolve() : reject(new Error(`Codex exited ${code}: ${stderr.trim() || "no diagnostic"}`)));
+    child.on("error", (error) => { clearTimeout(timeout); reject(error); });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (timedOut) return reject(new Error(`Codex exceeded the ${Math.round(timeoutMs / 1000)} second timeout`));
+      return code === 0 ? resolve() : reject(new Error(`Codex exited ${code}: ${stderr.trim() || "no diagnostic"}`));
+    });
     child.stdin.end(prompt);
   });
 }

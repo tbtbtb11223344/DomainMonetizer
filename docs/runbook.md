@@ -24,6 +24,7 @@ Content jobs are queued from the admin and consumed on demand from an authentica
 ```powershell
 $env:CODEX_RUNNER_SECRET = '<retrieve from your secret manager>'
 $env:CODEX_MODEL = 'gpt-5.6-terra'
+$env:CODEX_TIMEOUT_SECONDS = '1200'
 pnpm runner:codex
 ```
 
