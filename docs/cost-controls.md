@@ -42,7 +42,7 @@ Run this read-only command from the repository root:
 pnpm audit:cloudflare-costs
 ```
 
-The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found. The account is shared, so a failure requires attribution in the Cloudflare Billing page before changing anything.
+The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found, any required inventory read cannot be proven, or the project differs from the committed free-pilot contract: exactly two Workers, the two expected control schedules, one D1 database, one KV namespace, one protected admin app, no project Queue, and no paid or out-of-scope Worker binding. The account is shared, so a billing failure requires attribution in the Cloudflare Billing page before changing anything. An intentional architecture change requires updating this contract in the same reviewed change.
 
 Run the audit:
 
