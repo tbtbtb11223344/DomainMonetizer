@@ -353,6 +353,22 @@ td small {
   margin-top: 6px;
 }
 
+td small.tenant-state {
+  margin-top: 8px;
+  color: #8a641b;
+  font: 500 9px "DM Mono";
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+td small.tenant-state.ready {
+  color: #267340;
+}
+
+td small.tenant-state.issue {
+  color: #a23c28;
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -467,6 +483,7 @@ td small {
 }
 
 .evidence dt,
+.runtime dt,
 .signals dt,
 .checks h3,
 .versions h3 {
@@ -481,6 +498,77 @@ td small {
   margin: 6px 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.runtime {
+  padding: 27px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.runtime-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.runtime-head h3 {
+  margin: 0;
+  font: 500 10px "DM Mono";
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.runtime-state {
+  padding: 7px 9px;
+  background: #fff0d3;
+  color: #795000;
+  font: 500 9px "DM Mono";
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.runtime-state.ready {
+  background: #dff4e4;
+  color: #16723a;
+}
+
+.runtime dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 22px;
+  margin: 0;
+}
+
+.runtime dd {
+  margin: 5px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.runtime p {
+  margin: 18px 0 0;
+  color: #9a3e2c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.runtime button {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 20px;
+  border: 1px solid #bbbdb8;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.runtime button:disabled {
+  opacity: 0.5;
+  cursor: wait;
 }
 
 .signals {

@@ -27,6 +27,11 @@ function formatReason(value: string): string {
   return value.replaceAll("_", " ");
 }
 
+function formatTimestamp(value: string | null): string {
+  if (!value) return "Not checked";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(new Date(value));
+}
+
 function App() {
   const [domains, setDomains] = useState<DomainSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -80,6 +85,7 @@ function App() {
   }), [domains]);
 
   const metricByDomain = useMemo(() => new Map(overview?.domains.map((metric) => [metric.domain_id, metric]) ?? []), [overview]);
+  const healthByDomain = useMemo(() => new Map(overview?.healthChecks.map((check) => [check.domainId, check]) ?? []), [overview]);
 
   const action = async (path: string) => {
     setBusy(true);
@@ -97,6 +103,8 @@ function App() {
   const latestDraft = detail?.contents.find((content) => content.status === "draft");
   const current = detail?.domain;
   const currentMetric = current ? metricByDomain.get(current.id) : undefined;
+  const currentHealth = current ? healthByDomain.get(current.id) : undefined;
+  const currentRuntimeReady = Boolean(currentHealth?.fresh && currentHealth.status === "ready" && currentHealth.releaseMatches);
   const evidenceLabel = overview?.evidenceStatus === "review_ready"
     ? "Ready for scale review"
     : overview?.evidenceStatus === "insufficient_signal"
@@ -116,12 +124,13 @@ function App() {
     <main className="workspace" id="portfolio">
       <header className="topbar">
         <div><p className="kicker">DomainMonetizer</p><h1>Portfolio control</h1></div>
-        <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}</strong><span>live</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.observedFullDays ?? 0}</strong><span>clean days</span></div></div>
+        <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}/{overview?.health.ready ?? "—"}</strong><span>live / ready</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.observedFullDays ?? 0}</strong><span>clean days</span></div></div>
       </header>
 
       {error && <div className="error" role="alert"><span>Attention</span>{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
       {overview?.latestRun?.status === "failed" && <div className="error" role="alert"><span>Telemetry</span>Latest daily rollup failed for {overview.latestRun.metric_date}: {overview.latestRun.error_message ?? "No diagnostic was recorded."}</div>}
       {overview && overview.latestRun?.status !== "failed" && !overview.rollupCoverageComplete && <div className="error" role="alert"><span>Telemetry</span>Coverage is incomplete: {overview.observedFullDays} of {overview.expectedFullDays} completed UTC days are stored. Automatic recovery is pending through {overview.latestCompletedDate}.</div>}
+      {overview && overview.health.published > 0 && overview.health.ready < overview.health.published && <div className="error" role="alert"><span>Readiness</span>{overview.health.failing ? `${overview.health.failing} tenant check${overview.health.failing === 1 ? " is" : "s are"} failing.` : "A fresh end-to-end tenant check is pending."} Stale or unchecked tenants block scale review.</div>}
 
       <section className="toolbar">
         <label><span>Filter domains</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hostname or vertical" /></label>
@@ -134,12 +143,15 @@ function App() {
             <thead><tr><th>Hostname</th><th>Vertical</th><th>Pilot signal</th><th>Parking baseline</th><th>Status</th><th aria-label="Open" /></tr></thead>
             <tbody>{domains.map((domain) => {
               const metric = metricByDomain.get(domain.id);
+              const runtimeHealth = healthByDomain.get(domain.id);
+              const runtimeReady = Boolean(runtimeHealth?.fresh && runtimeHealth.status === "ready" && runtimeHealth.releaseMatches);
+              const runtimeIssue = Boolean(runtimeHealth?.fresh && !runtimeReady);
               return <tr key={domain.id} className={selected === domain.hostname ? "selected" : ""} onClick={() => setSelected(domain.hostname)}>
               <td><strong>{domain.hostname}</strong><small>{domain.country ?? "Country unverified"}</small></td>
               <td>{domain.vertical ?? "Unclassified"}</td>
               <td><strong>{formatNumber(metric?.unique_visitors ?? 0)}</strong><small>{formatNumber(metric?.likely_human_views ?? 0)} views · {formatNumber(metric?.human_engaged_visits ?? 0)} engaged</small></td>
               <td><strong>{formatNumber(domain.traffic30dVisitors)}</strong><small>{formatMoney(domain.parking30dRevenueUsd)} parking</small></td>
-              <td><span className={`status ${domain.lifecycleStatus}`}>{statusLabels[domain.lifecycleStatus]}</span></td>
+              <td><span className={`status ${domain.lifecycleStatus}`}>{statusLabels[domain.lifecycleStatus]}</span>{domain.lifecycleStatus === "published" && <small className={`tenant-state ${runtimeReady ? "ready" : runtimeIssue ? "issue" : "pending"}`}>{runtimeReady ? "Runtime ready" : runtimeIssue ? "Runtime issue" : "Check pending"}</small>}</td>
               <td><button className="row-open" aria-label={`Inspect ${domain.hostname}`}>→</button></td>
             </tr>})}</tbody>
           </table>
@@ -151,6 +163,7 @@ function App() {
           {current ? <>
             <div className="inspector-head"><div><p className="kicker">Domain inspector</p><h2>{current.hostname}</h2></div><span className={`status ${current.lifecycleStatus}`}>{statusLabels[current.lifecycleStatus]}</span></div>
             <div className="evidence"><p>{current.aiSummary ?? "No AI summary has been imported."}</p><dl><div><dt>Vertical</dt><dd>{current.vertical ?? "—"}</dd></div><div><dt>Country fit</dt><dd>{current.country ?? "—"}</dd></div><div><dt>30d visitors</dt><dd>{formatNumber(current.traffic30dVisitors)}</dd></div><div><dt>Registrar</dt><dd>{current.registrar ?? "—"}</dd></div></dl></div>
+            <div className="runtime"><div className="runtime-head"><h3>Runtime readiness</h3><span className={`runtime-state ${currentRuntimeReady ? "ready" : "pending"}`}>{currentRuntimeReady ? "Ready" : currentHealth?.status === "unchecked" || !currentHealth ? "Unchecked" : "Not ready"}</span></div><dl><div><dt>HTTP</dt><dd>{currentHealth?.httpStatus ?? "—"}</dd></div><div><dt>Latency</dt><dd>{currentHealth?.latencyMs === null || currentHealth?.latencyMs === undefined ? "—" : `${currentHealth.latencyMs} ms`}</dd></div><div><dt>Release</dt><dd>{currentHealth?.releaseMatches ? "Verified" : "Unverified"}</dd></div><div><dt>Checked</dt><dd>{formatTimestamp(currentHealth?.checkedAt ?? null)}</dd></div></dl>{currentHealth?.errorMessage && <p>{currentHealth.errorMessage}</p>}<button disabled={busy} onClick={() => void action("/api/health/check")}>Check all live tenants</button></div>
             <div className="signals"><div className="signals-head"><h3>Pilot signal</h3><span className={`evidence-state ${overview?.evidenceStatus ?? "collecting"}`}>{evidenceLabel}</span></div><dl><div><dt>Qualified sessions</dt><dd>{formatNumber(currentMetric?.unique_visitors ?? 0)}</dd></div><div><dt>Likely-human views</dt><dd>{formatNumber(currentMetric?.likely_human_views ?? 0)}</dd></div><div><dt>Engagement</dt><dd>{formatPercent(currentMetric?.human_engaged_visits ?? 0, currentMetric?.likely_human_views ?? 0)}</dd></div><div><dt>US share</dt><dd>{formatPercent(currentMetric?.us_likely_human_views ?? 0, currentMetric?.likely_human_views ?? 0)}</dd></div></dl><p>Clean measurement began {overview?.telemetryStartDate ?? "—"}. {overview?.rollupCoverageComplete ? `Coverage is complete through ${overview.rollupThrough ?? "the first completed day"}.` : `Coverage is ${overview?.observedFullDays ?? 0}/${overview?.expectedFullDays ?? 0} completed days; recovery targets ${overview?.latestCompletedDate ?? "the latest completed day"}.`} Preview traffic and launch checks are excluded.</p></div>
             <div className="quality"><div className="quality-head"><h3>Traffic quality</h3><span>Top clean sources</span></div>{detail.sourceMetrics.length ? <ul>{detail.sourceMetrics.map((source) => <li key={`${source.visitor_class}:${source.classification_reason}:${source.country}:${source.asn}:${source.as_org}`}><div><span className={`source-class ${source.visitor_class}`}>{source.visitor_class}</span><strong>{source.as_org || (source.asn ? `ASN ${source.asn}` : "Network unavailable")}</strong></div><p>{source.country} · {formatReason(source.classification_reason)} · {formatNumber(source.views)} views{source.engaged_visits ? ` · ${formatNumber(source.engaged_visits)} engaged` : ""}</p></li>)}</ul> : <p className="quality-empty">Classification reason and network origin will appear after the first clean daily rollup.</p>}</div>
             <div className="checks"><h3>Eligibility evidence</h3><ul><li className={current.sourceType === "parking" ? "pass" : "fail"}>Parking type</li><li className={current.sourceStatus === "available" ? "pass" : "fail"}>Available status</li><li className={!current.sourceLabels.some((label) => label.toLowerCase() === "traffic2") ? "pass" : "fail"}>No Traffic2 label</li></ul></div>

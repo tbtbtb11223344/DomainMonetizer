@@ -49,9 +49,18 @@ python ops/collect_pilot_evidence.py `
 
 `preview.multibrands.net` is a seven-day KV alias of one approved release. It is not a portfolio record and must never be imported into the domains table. Publishing a preview does not change the selected domain's DNS.
 
-## Analytics rollup
+## Scheduled evidence and readiness
 
-The scheduled Worker runs at `04:17 UTC`. It compares D1 with every completed UTC day from `TELEMETRY_MIN_DATE`, then rolls up the oldest five missing dates. Normal operation processes one day; the bounded replay automatically repairs gaps without exceeding the Free-plan subrequest budget. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
+The analytics rollup runs at `04:17 UTC`. It compares D1 with every completed UTC day from `TELEMETRY_MIN_DATE`, then rolls up the oldest five missing dates. Normal operation processes one day; the bounded replay automatically repairs gaps without exceeding the Free-plan subrequest budget. `TELEMETRY_MIN_DATE` is a deliberate clean-data boundary; a rollup before it records a `skipped` run and writes no domain metrics. Preview-host events are always excluded.
+
+Tenant readiness runs at `00:47`, `06:47`, `12:47`, and `18:47 UTC`. It checks up to 20 published domains through their public `/readyz` endpoint, requires the exact active release ID, and stores 90 days of results. The pilot must never exceed 20 published domains without replacing this bounded monitor with queued or cursor-batched work. A check is fresh for eight hours; stale, unchecked, unreachable, non-200, or release-mismatched tenants block scale review.
+
+An authenticated operator can run the same safe check immediately. It creates no visitor telemetry:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:OPERATOR_API_TOKEN"; "CF-Access-Client-Id" = $env:CF_ACCESS_CLIENT_ID; "CF-Access-Client-Secret" = $env:CF_ACCESS_CLIENT_SECRET }
+Invoke-RestMethod -Method Post -Uri https://admin.multibrands.net/api/health/check -Headers $headers
+```
 
 An authenticated operator can safely re-run a completed date. The operation is idempotent for metric rows and creates an audit record:
 

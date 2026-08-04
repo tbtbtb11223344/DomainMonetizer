@@ -25,6 +25,6 @@ pnpm build
 
 Copy `.env.example` to `.dev.vars` only for local Worker development. Never commit either `.env` or `.dev.vars`.
 
-The first pilot is intentionally traffic-measurement only. Clean telemetry begins on `2026-08-05` UTC; launch checks before that boundary are excluded. The admin reports qualified anonymous sessions, likely-human views, engagement, US share, classification reason, network origin, and rollup health after each completed UTC day.
+The first pilot is intentionally traffic-measurement only. Clean telemetry begins on `2026-08-05` UTC; launch checks before that boundary are excluded. The admin reports qualified anonymous sessions, likely-human views, engagement, US share, classification reason, network origin, rollup coverage, and fresh end-to-end tenant readiness. Readiness probes use `/readyz` and never create page-view events.
 
 Marketcall remains disabled until campaign moderation, destination routing, and postback attribution are implemented and verified. The traffic gate and the economic monetization gate are separate decisions: traffic evidence can justify a larger pilot, but cannot prove profitability.

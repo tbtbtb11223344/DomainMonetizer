@@ -22,6 +22,8 @@ The public Worker has no D1, Cloudflare API, provider, or admin credentials. The
 
 Shared liveness and tenant readiness are deliberately separate. `/healthz` proves the Worker runtime is responding; `/readyz` additionally resolves the request hostname through the active KV pointer and validates the release snapshot. Tenant readiness is `200` only for a live release and `503` for a missing, malformed, unavailable, or paused tenant. Neither probe records a visitor event.
 
+During the pilot, the control Worker calls every published tenant's `/readyz` four times daily and stores the HTTP result, latency, expected release, observed release, and bounded error in D1. A tenant counts as ready only when the end-to-end hostname returns the exact active release within the last eight hours. This catches DNS, TLS, route, KV, and stale-release failures without contaminating natural-traffic data. Each invocation is capped at 20 tenants, safely below the Workers Free subrequest limit; this is intentionally a pilot monitor, not the thousands-domain implementation. Scaling requires a queued or cursor-batched checker before domain 21 is published.
+
 ## Publication model
 
 1. Validate structured content with the shared schema.
@@ -56,7 +58,7 @@ Each completed UTC day is rolled into D1 with sampling-aware Analytics Engine SQ
 
 The scheduled rollup is self-healing. It compares successful runs with the actual latest completed UTC day and replays up to five oldest missing days per invocation. A rerun resets the date's prior traffic fields and replaces its country and source-quality rows before applying the fresh result, so an empty or corrected Analytics query cannot leave stale evidence behind. Conversion and revenue columns remain independent for the later economic ledger.
 
-The admin exposes an evidence status, not an automatic expansion command:
+The admin exposes an evidence status, not an automatic expansion command. Complete rollup coverage and fresh exact-release readiness for every published pilot tenant are hard prerequisites:
 
 - `collecting`: fewer than 14 complete clean UTC days;
 - `insufficient_signal`: at least 14 days but fewer than 10 qualified anonymous sessions across the pilot;

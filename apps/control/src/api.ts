@@ -16,10 +16,17 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
+import { checkPublishedTenants, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow } from "./health";
 import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
 type App = Hono<{ Bindings: Env; Variables: Variables }>;
+
+interface OverviewDomainRow extends HealthPortfolioDomain {
+  likely_human_views: number | string;
+  unique_visitors: number | string;
+  human_engaged_visits: number | string;
+}
 
 function jsonValue<T>(raw: string, fallback: T): T {
   try {
@@ -143,13 +150,14 @@ export function mountApi(app: App): void {
     const telemetryStartDate = c.env.TELEMETRY_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.TELEMETRY_MIN_DATE)
       ? c.env.TELEMETRY_MIN_DATE
       : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-    const [domains, latestRun] = await Promise.all([
-      c.env.DB.prepare(
-        "SELECT d.id AS domain_id, d.hostname, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname ORDER BY d.hostname",
-      ).bind(telemetryStartDate).all(),
-      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
-    ]);
     const coverageNow = new Date();
+    const [domains, latestRun, latestHealth] = await Promise.all([
+      c.env.DB.prepare(
+        "SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(m.unique_visitors),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id ORDER BY d.hostname",
+      ).bind(telemetryStartDate).all<OverviewDomainRow>(),
+      c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
+      c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
+    ]);
     const latestCompletedDate = latestCompletedUtcDate(coverageNow);
     const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?").bind(telemetryStartDate, latestCompletedDate).first<{ metric_date: string | null; successful_days: number }>();
     const through = coverage?.metric_date ?? null;
@@ -158,17 +166,23 @@ export function mountApi(app: App): void {
     const expectedDays = coverageTarget.expectedFullDays;
     const rollupCoverageComplete = coverageTarget.complete;
     const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number }>((sum, row) => {
-      const value = row as Record<string, unknown>;
-      sum.likelyHumanViews += Number(value.likely_human_views ?? 0);
-      sum.uniqueVisitors += Number(value.unique_visitors ?? 0);
-      sum.humanEngagedVisits += Number(value.human_engaged_visits ?? 0);
+      sum.likelyHumanViews += Number(row.likely_human_views ?? 0);
+      sum.uniqueVisitors += Number(row.unique_visitors ?? 0);
+      sum.humanEngagedVisits += Number(row.human_engaged_visits ?? 0);
       return sum;
     }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0 });
-    const evidenceStatus = observedFullDays < 14 || !rollupCoverageComplete
+    const { health, healthChecks, allTenantsReady } = summarizeTenantHealth(domains.results, latestHealth.results, coverageNow);
+    const evidenceStatus = observedFullDays < 14 || !rollupCoverageComplete || !allTenantsReady
       ? "collecting"
       : totals.uniqueVisitors < 10
         ? "insufficient_signal"
         : "review_ready";
+    const reviewBlockers = [
+      ...(observedFullDays < 14 ? ["observation_window"] : []),
+      ...(!rollupCoverageComplete ? ["rollup_coverage"] : []),
+      ...(!allTenantsReady ? ["tenant_readiness"] : []),
+      ...(observedFullDays >= 14 && totals.uniqueVisitors < 10 ? ["qualified_sessions"] : []),
+    ];
     return c.json({
       telemetryStartDate,
       latestCompletedDate,
@@ -180,8 +194,24 @@ export function mountApi(app: App): void {
       minimumReviewDays: 14,
       totals,
       domains: domains.results,
+      health,
+      healthChecks,
+      reviewBlockers,
       latestRun,
     });
+  });
+
+  app.post("/api/health/check", async (c) => {
+    const result = await checkPublishedTenants(c.env);
+    await auditStatement(c.env.DB, {
+      actor: c.get("actor"),
+      action: "health.check",
+      entityType: "portfolio",
+      entityId: "published",
+      requestId: c.get("requestId"),
+      after: { checked: result.checked, ready: result.ready, notReady: result.notReady, unreachable: result.unreachable, truncated: result.truncated },
+    }).run();
+    return c.json(result);
   });
 
   app.post("/api/metrics/rollup", async (c) => {
@@ -233,7 +263,8 @@ export function mountApi(app: App): void {
     const metrics = await c.env.DB.prepare("SELECT * FROM daily_domain_metrics WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
     const countryMetrics = await c.env.DB.prepare("SELECT country,SUM(views) AS views,SUM(likely_human_views) AS likely_human_views,SUM(human_engaged_visits) AS human_engaged_visits FROM daily_domain_country_metrics WHERE domain_id=? GROUP BY country ORDER BY likely_human_views DESC,views DESC LIMIT 10").bind(domain.id).all();
     const sourceMetrics = await c.env.DB.prepare("SELECT visitor_class,classification_reason,country,asn,as_org,SUM(views) AS views,SUM(engaged_visits) AS engaged_visits FROM daily_domain_source_metrics WHERE domain_id=? AND metric_date>=? GROUP BY visitor_class,classification_reason,country,asn,as_org ORDER BY views DESC,engaged_visits DESC LIMIT 12").bind(domain.id, c.env.TELEMETRY_MIN_DATE ?? "0000-01-01").all();
-    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results, sourceMetrics: sourceMetrics.results });
+    const healthChecks = await c.env.DB.prepare("SELECT status,http_status,latency_ms,expected_release_id,observed_release_id,error_message,checked_at FROM tenant_health_checks WHERE domain_id=? ORDER BY checked_at DESC LIMIT 20").bind(domain.id).all();
+    return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results, sourceMetrics: sourceMetrics.results, healthChecks: healthChecks.results });
   });
 
   app.post("/api/domains/:hostname/content", async (c) => {

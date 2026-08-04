@@ -58,6 +58,30 @@ export interface SourceMetric {
   engaged_visits: number;
 }
 
+export interface TenantHealthCheck {
+  status: "ready" | "not_ready" | "unreachable";
+  http_status: number | null;
+  latency_ms: number;
+  expected_release_id: string;
+  observed_release_id: string | null;
+  error_message: string | null;
+  checked_at: string;
+}
+
+export interface CurrentTenantHealth {
+  domainId: string;
+  hostname: string;
+  status: "ready" | "not_ready" | "unreachable" | "unchecked";
+  httpStatus: number | null;
+  latencyMs: number | null;
+  expectedReleaseId: string | null;
+  observedReleaseId: string | null;
+  errorMessage: string | null;
+  checkedAt: string | null;
+  fresh: boolean;
+  releaseMatches: boolean;
+}
+
 export interface DomainMetricSummary {
   domain_id: string;
   hostname: string;
@@ -85,6 +109,9 @@ export interface MetricsOverview {
   minimumReviewDays: number;
   totals: { likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number };
   domains: DomainMetricSummary[];
+  health: { published: number; ready: number; failing: number; stale: number; unchecked: number; lastCheckedAt: string | null };
+  healthChecks: CurrentTenantHealth[];
+  reviewBlockers: string[];
   latestRun: { metric_date: string; status: string; error_message: string | null; completed_at: string | null } | null;
 }
 
@@ -95,6 +122,7 @@ export interface DomainDetail {
   metrics: MetricDay[];
   countryMetrics: CountryMetric[];
   sourceMetrics: SourceMetric[];
+  healthChecks: TenantHealthCheck[];
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
