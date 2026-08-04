@@ -258,6 +258,14 @@ input {
   background: #245cff;
 }
 
+.dot.measure {
+  background: #25a856;
+}
+
+.dot.issue {
+  background: #c3432f;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(720px, 1fr) minmax(470px, 520px);

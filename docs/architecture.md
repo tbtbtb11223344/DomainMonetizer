@@ -75,7 +75,7 @@ The admin exposes an evidence status, not an automatic expansion command. Comple
 
 `review_ready` can justify discussing a larger traffic pilot. It does not prove monetization economics; that requires the later Marketcall conversion and payout ledger.
 
-During the natural-traffic pilot, the protected overview also reports active offers, active routing policies, clicks, conversions, and postbacks. The deterministic operator audit requires all five counts to remain zero. This makes the measurement-only state an observable invariant rather than an assumption; enabling any monetization component deliberately fails the pilot audit until the later Marketcall phase updates the operating contract.
+During the natural-traffic pilot, the protected overview also reports active offers, active routing policies, clicks, conversions, and postbacks. The evidence gate and deterministic operator audit require all five counts to remain zero, and the admin shows the state beside live readiness. This makes the measurement-only state an observable invariant rather than an assumption; enabling any monetization component deliberately blocks review and fails the pilot audit until the later Marketcall phase updates the operating contract.
 
 Cloudflare Access is the interactive-admin boundary. The Zero Trust Free organization protects the browser session; operational API calls require both an Access service token and the separate operator bearer secret. Neither credential is exposed to the public Worker or reused as the edge/control secret.
 

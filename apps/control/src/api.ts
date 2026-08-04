@@ -225,6 +225,14 @@ export function mountApi(app: App): void {
     }, { likelyHumanViews: 0, uniqueVisitors: 0, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     const samplingDetected = totals.maxSampleInterval > 1;
     const sessionSamplingDetected = totals.uniqueSampleInterval > 1;
+    const monetization = {
+      activeOffers: Number(monetizationState?.active_offers ?? 0),
+      activeRoutingPolicies: Number(monetizationState?.active_routing_policies ?? 0),
+      clicks: Number(monetizationState?.clicks ?? 0),
+      conversions: Number(monetizationState?.conversions ?? 0),
+      postbacks: Number(monetizationState?.postbacks ?? 0),
+    };
+    const measurementOnly = Object.values(monetization).every((value) => value === 0);
     const { health, healthChecks, allTenantsReady, allTenantsReliable } = summarizeTenantHealth(
       domains.results,
       latestHealth.results,
@@ -240,6 +248,7 @@ export function mountApi(app: App): void {
       allTenantsReliable,
       telemetryPipelineVerified,
       sessionSamplingDetected,
+      measurementOnly,
       qualifiedSessions: totals.uniqueVisitors,
       minimumQualifiedSessions: 10,
     });
@@ -258,13 +267,7 @@ export function mountApi(app: App): void {
       healthChecks,
       sampling: { detected: samplingDetected, maxSampleInterval: totals.maxSampleInterval, uniqueSampleInterval: totals.uniqueSampleInterval, exactQualifiedSessions: !sessionSamplingDetected },
       telemetry: { pipelineVerified: telemetryPipelineVerified, verifiedDays: telemetryVerifiedDays, expectedDays },
-      monetization: {
-        activeOffers: Number(monetizationState?.active_offers ?? 0),
-        activeRoutingPolicies: Number(monetizationState?.active_routing_policies ?? 0),
-        clicks: Number(monetizationState?.clicks ?? 0),
-        conversions: Number(monetizationState?.conversions ?? 0),
-        postbacks: Number(monetizationState?.postbacks ?? 0),
-      },
+      monetization,
       reviewBlockers: decision.blockers,
       latestRun,
     });

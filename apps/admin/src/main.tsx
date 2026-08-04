@@ -173,6 +173,9 @@ function App() {
       : overview.sampling.detected
         ? `Qualified sessions are exact; country and source breakdowns are sampling-adjusted estimates (maximum ×${overview.sampling.maxSampleInterval}).`
         : "Analytics remains unsampled, so qualified sessions and quality breakdowns are exact.";
+  const measurementOnly = overview
+    ? Object.values(overview.monetization).every((value) => value === 0)
+    : null;
 
   return <div className="shell">
     <aside className="rail">
@@ -200,10 +203,11 @@ function App() {
       {overview && overview.expectedFullDays > 0 && !overview.telemetry.pipelineVerified && <div className="error" role="alert"><span>Event pipeline</span>Trusted readiness canaries verified {overview.telemetry.verifiedDays} of {overview.telemetry.expectedDays} completed days. Natural-traffic conclusions are blocked until ingestion is proven.</div>}
       {overview && overview.health.published > 0 && overview.health.ready < overview.health.published && <div className="error" role="alert"><span>Readiness</span>{overview.health.failing ? `${overview.health.failing} tenant check${overview.health.failing === 1 ? " is" : "s are"} failing.` : "A fresh end-to-end tenant check is pending."} Stale or unchecked tenants block scale review.</div>}
       {overview && overview.expectedFullDays > 0 && overview.health.reliable < overview.health.published && <div className="error" role="alert"><span>Reliability</span>{overview.health.published - overview.health.reliable} tenant{overview.health.published - overview.health.reliable === 1 ? " is" : "s are"} below 95% scheduled coverage or readiness. Scale review is blocked.</div>}
+      {overview && measurementOnly === false && <div className="error" role="alert"><span>Monetization</span>The measurement-only invariant is broken: {overview.monetization.activeOffers} active offers, {overview.monetization.activeRoutingPolicies} active policies, {overview.monetization.clicks} clicks, {overview.monetization.conversions} conversions, and {overview.monetization.postbacks} postbacks. Natural-traffic review is blocked.</div>}
 
       <section className="toolbar">
         <label><span>Filter domains</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hostname or vertical" /></label>
-        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Ready {totals.ready}</span></div>
+        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Ready {totals.ready}</span><span><i className={`dot ${measurementOnly === null ? "ready" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
       </section>
 
       <div className="content-grid">

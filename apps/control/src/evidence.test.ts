@@ -9,6 +9,7 @@ const ready: EvidenceInputs = {
   allTenantsReliable: true,
   telemetryPipelineVerified: true,
   sessionSamplingDetected: false,
+  measurementOnly: true,
   qualifiedSessions: 10,
   minimumQualifiedSessions: 10,
 };
@@ -31,6 +32,10 @@ describe("scale-review evidence decision", () => {
 
   it("distinguishes insufficient natural traffic from an operational defect", () => {
     expect(decideEvidence({ ...ready, qualifiedSessions: 9 })).toEqual({ status: "insufficient_signal", blockers: ["qualified_sessions"] });
+  });
+
+  it("blocks review if monetization is active during the measurement-only pilot", () => {
+    expect(decideEvidence({ ...ready, measurementOnly: false })).toEqual({ status: "collecting", blockers: ["monetization_state"] });
   });
 
   it("opens review only after every independent gate passes", () => {
