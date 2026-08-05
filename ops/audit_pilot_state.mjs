@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { pilotDecision } from "./pilot_decision.mjs";
+import { evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
 
 function parseEnv(source) {
   const values = {};
@@ -138,16 +138,10 @@ const unexpectedPublished = domains
   .sort();
 if (unexpectedPublished.length) issues.push(`Unexpected published domains: ${unexpectedPublished.join(", ")}`);
 
-const operationalBlockers = new Set([
-  "rollup_coverage",
-  "tenant_readiness",
-  "tenant_reliability",
-  "telemetry_pipeline",
-  "qualified_session_sampling",
-]);
-for (const blocker of overview.reviewBlockers ?? []) {
-  if (operationalBlockers.has(blocker)) issues.push(`Evidence gate reports ${blocker}`);
-}
+issues.push(...evidenceContractIssues({
+  evidenceStatus: overview.evidenceStatus,
+  reviewBlockers: overview.reviewBlockers,
+}));
 
 if (!overview.currentDaySchedule) {
   issues.push("Current-day readiness schedule state is missing from the control-plane overview");
