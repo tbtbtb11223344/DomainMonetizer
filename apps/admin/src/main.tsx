@@ -114,8 +114,6 @@ function App() {
 
   const totals = useMemo(() => ({
     live: domains.filter((domain) => domain.lifecycleStatus === "published").length,
-    ready: domains.filter((domain) => domain.lifecycleStatus === "ready").length,
-    visitors: domains.reduce((sum, domain) => sum + (domain.traffic30dVisitors ?? 0), 0),
   }), [domains]);
 
   const metricByDomain = useMemo(() => new Map(overview?.domains.map((metric) => [metric.domain_id, metric]) ?? []), [overview]);
@@ -208,7 +206,7 @@ function App() {
 
       <section className="toolbar">
         <label><span>Filter domains</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hostname or vertical" /></label>
-        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Ready {totals.ready}</span><span><i className={`dot ${measurementOnly === null ? "ready" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
+        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Runtime ready {overview?.health.ready ?? "—"}</span><span><i className={`dot ${measurementOnly === null ? "ready" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
       </section>
 
       <div className="content-grid">
