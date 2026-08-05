@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mutableResponse } from "./index";
+import { mutableResponse, scheduledTaskForCron } from "./index";
 
 describe("control response handling", () => {
   it("copies asset responses before middleware adds security headers", async () => {
@@ -29,5 +29,16 @@ describe("control response handling", () => {
 
     expect(copied.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     expect(await copied.text()).toBe("compiled asset");
+  });
+});
+
+describe("scheduled task routing", () => {
+  it("maps only the two committed cron expressions", () => {
+    expect(scheduledTaskForCron("47 */6 * * *")).toBe("tenant_health");
+    expect(scheduledTaskForCron("17 4 * * *")).toBe("analytics_rollup");
+  });
+
+  it("fails closed for an unrecognized cron expression", () => {
+    expect(() => scheduledTaskForCron("0 * * * *")).toThrow("Unrecognized cron trigger");
   });
 });

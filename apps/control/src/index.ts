@@ -8,6 +8,15 @@ import type { Env, Variables } from "./types";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 const HEALTH_CRON = "47 */6 * * *";
+const ROLLUP_CRON = "17 4 * * *";
+
+export type ScheduledTaskName = "tenant_health" | "analytics_rollup";
+
+export function scheduledTaskForCron(cron: string): ScheduledTaskName {
+  if (cron === HEALTH_CRON) return "tenant_health";
+  if (cron === ROLLUP_CRON) return "analytics_rollup";
+  throw new Error(`Unrecognized cron trigger: ${cron}`);
+}
 
 export function mutableResponse(response: Response, requestPath = ""): Response {
   const copy = new Response(response.body, {
@@ -81,19 +90,26 @@ app.onError((error, c) => {
 export default {
   fetch: app.fetch,
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    const task = controller.cron === HEALTH_CRON
-      ? checkPublishedTenants(env, new Date(controller.scheduledTime), fetch, "scheduled").then((batch) => {
-        if (batch.truncated) throw new Error(`Tenant health check reached its ${batch.checked}-domain pilot limit`);
-        console.log(JSON.stringify({ level: batch.ready === batch.checked ? "info" : "warn", task: "tenant_health", ...batch }));
-      })
-      : rollupMissingCompletedDates(env, new Date(controller.scheduledTime)).then((batch) => {
-        if (batch.failures.length) {
-          throw new Error(`Analytics rollup failed: ${batch.failures.map((failure) => `${failure.metricDate} (${failure.message})`).join(", ")}`);
-        }
-        console.log(JSON.stringify({ level: "info", task: "analytics_rollup", ...batch }));
-      });
+    let taskName: ScheduledTaskName | "unknown_cron" = "unknown_cron";
+    let task: Promise<unknown>;
+    try {
+      taskName = scheduledTaskForCron(controller.cron);
+      task = taskName === "tenant_health"
+        ? checkPublishedTenants(env, new Date(controller.scheduledTime), fetch, "scheduled").then((batch) => {
+          if (batch.truncated) throw new Error(`Tenant health check reached its ${batch.checked}-domain pilot limit`);
+          console.log(JSON.stringify({ level: batch.ready === batch.checked ? "info" : "warn", task: "tenant_health", ...batch }));
+        })
+        : rollupMissingCompletedDates(env, new Date(controller.scheduledTime)).then((batch) => {
+          if (batch.failures.length) {
+            throw new Error(`Analytics rollup failed: ${batch.failures.map((failure) => `${failure.metricDate} (${failure.message})`).join(", ")}`);
+          }
+          console.log(JSON.stringify({ level: "info", task: "analytics_rollup", ...batch }));
+        });
+    } catch (error) {
+      task = Promise.reject(error);
+    }
     ctx.waitUntil(task.catch((error: unknown) => {
-      console.error(JSON.stringify({ level: "error", task: controller.cron === HEALTH_CRON ? "tenant_health" : "analytics_rollup", message: error instanceof Error ? error.message : "Unknown error" }));
+      console.error(JSON.stringify({ level: "error", task: taskName, message: error instanceof Error ? error.message : "Unknown error" }));
       throw error;
     }));
   },
