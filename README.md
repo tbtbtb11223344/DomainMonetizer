@@ -10,7 +10,7 @@ DomainMonetizer is one multi-tenant Cloudflare application that serves many port
 - `packages/core`: schemas, release compiler, hostname rules, and shared contracts.
 - `migrations`: versioned D1 schema.
 
-See [docs/architecture.md](docs/architecture.md), [docs/runbook.md](docs/runbook.md), and [docs/cost-controls.md](docs/cost-controls.md).
+See [docs/architecture.md](docs/architecture.md), [docs/runbook.md](docs/runbook.md), [docs/cost-controls.md](docs/cost-controls.md), and the requirement-by-requirement [implementation and scale-gate ledger](docs/implementation-status.md).
 
 ## Local development
 
