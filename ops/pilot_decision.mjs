@@ -73,3 +73,32 @@ export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
   }
   return issues;
 }
+
+export function currentDayCanaryIssues({ schedule, rows }) {
+  if (!schedule || Number(schedule.requiredByNowPerDomain ?? 0) === 0) return [];
+  if (!Array.isArray(rows)) return ["Current-day Analytics Engine canaries are missing or malformed"];
+
+  const issues = [];
+  const domains = Array.isArray(schedule.domains) ? schedule.domains : [];
+  const expectedDomainIds = new Set(domains.map((domain) => domain.domainId));
+  const rowByDomain = new Map(rows.map((row) => [row.domain_id, row]));
+  for (const row of rows) {
+    if (!expectedDomainIds.has(row.domain_id)) {
+      issues.push(`Unexpected current-day health canary domain: ${String(row.domain_id)}`);
+    }
+  }
+  for (const domain of domains) {
+    const row = rowByDomain.get(domain.domainId);
+    const observedCanaries = Number(row?.distinct_canaries ?? 0);
+    const maxSampleInterval = Number(row?.max_sample_interval ?? 1);
+    const required = Number(domain.requiredByNow ?? schedule.requiredByNowPerDomain ?? 0);
+    const storedChecks = Number(domain.observedChecks ?? 0);
+    if (observedCanaries < required || observedCanaries > storedChecks) {
+      issues.push(`${domain.hostname}: current-day scheduled canaries=${observedCanaries}, required=${required}, stored checks=${storedChecks}`);
+    }
+    if (maxSampleInterval !== 1) {
+      issues.push(`${domain.hostname}: current-day health canary query is sampled at ${maxSampleInterval}`);
+    }
+  }
+  return issues;
+}

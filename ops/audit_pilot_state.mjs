@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
+import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
 
 function parseEnv(source) {
   const values = {};
@@ -52,6 +52,44 @@ async function readJson(url, init = {}) {
   });
   const body = await response.json().catch(() => null);
   return { response, body };
+}
+
+function nextUtcDate(date) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
+async function readCurrentDayCanaries(environment, schedule) {
+  const required = Number(schedule?.requiredByNowPerDomain ?? 0);
+  if (required === 0) return { checked: false, requiredByNowPerDomain: 0, rows: [] };
+  const accountId = environment.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = environment.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !apiToken) throw new Error("Cloudflare Analytics credentials are unavailable");
+  const dataset = environment.ANALYTICS_DATASET || "domain_monetizer_events";
+  if (!/^[a-zA-Z0-9_]+$/u.test(dataset)) throw new Error("Analytics dataset name is invalid");
+  const date = schedule.date;
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Current-day schedule date is invalid");
+  const sql = `SELECT index1 AS domain_id, count(DISTINCT blob7) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1`;
+  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "text/plain" },
+    body: sql,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(body?.data)) {
+    throw new Error(`Current-day Analytics canary query failed (${response.status})`);
+  }
+  return {
+    checked: true,
+    requiredByNowPerDomain: required,
+    rows: body.data.map((row) => ({
+      domain_id: String(row.domain_id ?? ""),
+      distinct_canaries: Number(row.distinct_canaries ?? 0),
+      max_sample_interval: Number(row.max_sample_interval ?? 1),
+    })),
+  };
 }
 
 const environment = await loadEnvironment();
@@ -149,6 +187,14 @@ if (!overview.currentDaySchedule) {
   issues.push(`Current-day readiness schedule is out of contract: ${overview.currentDaySchedule.observedChecks} observed, ${overview.currentDaySchedule.requiredChecks} required, ${overview.currentDaySchedule.expectedChecks} expected, ${overview.currentDaySchedule.readyChecks} ready`);
 }
 
+let currentDayCanaries = { checked: false, requiredByNowPerDomain: 0, rows: [] };
+try {
+  currentDayCanaries = await readCurrentDayCanaries(environment, overview.currentDaySchedule);
+  issues.push(...currentDayCanaryIssues({ schedule: overview.currentDaySchedule, rows: currentDayCanaries.rows }));
+} catch (error) {
+  issues.push(error instanceof Error ? error.message : "Current-day Analytics canary query failed");
+}
+
 const monetization = overview.monetization;
 if (!monetization) {
   issues.push("Monetization state is missing from the control-plane overview");
@@ -184,6 +230,7 @@ const report = {
     domainTotals: overview.domains,
     health: overview.health,
     currentDaySchedule: overview.currentDaySchedule,
+    currentDayCanaries,
     sampling: overview.sampling,
     telemetry: overview.telemetry,
     monetization: overview.monetization,

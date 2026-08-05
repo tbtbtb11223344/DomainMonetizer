@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
+import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
 
 describe("pilot decision handoff", () => {
   it("prioritizes operational repair over traffic interpretation", () => {
@@ -62,5 +62,48 @@ describe("evidence API contract", () => {
     expect(evidenceContractIssues({ evidenceStatus: "collecting", reviewBlockers: [] })).toContain(
       "collecting is inconsistent with an empty evidence-blocker list",
     );
+  });
+});
+
+describe("current-day canary reconciliation", () => {
+  const schedule = {
+    requiredByNowPerDomain: 1,
+    domains: [
+      { domainId: "dom_1", hostname: "one.example", requiredByNow: 1, observedChecks: 1 },
+      { domainId: "dom_2", hostname: "two.example", requiredByNow: 1, observedChecks: 1 },
+    ],
+  };
+
+  it("accepts one exact unsampled canary per required check", () => {
+    expect(currentDayCanaryIssues({ schedule, rows: [
+      { domain_id: "dom_1", distinct_canaries: 1, max_sample_interval: 1 },
+      { domain_id: "dom_2", distinct_canaries: 1, max_sample_interval: 1 },
+    ] })).toEqual([]);
+  });
+
+  it("tolerates an in-grace stored check until it becomes required", () => {
+    const inGrace = {
+      requiredByNowPerDomain: 1,
+      domains: [{ domainId: "dom_1", hostname: "one.example", requiredByNow: 1, observedChecks: 2 }],
+    };
+    expect(currentDayCanaryIssues({ schedule: inGrace, rows: [
+      { domain_id: "dom_1", distinct_canaries: 1, max_sample_interval: 1 },
+    ] })).toEqual([]);
+  });
+
+  it("rejects missing, extra-domain, and sampled canaries", () => {
+    expect(currentDayCanaryIssues({ schedule, rows: [
+      { domain_id: "dom_1", distinct_canaries: 2, max_sample_interval: 5 },
+      { domain_id: "dom_extra", distinct_canaries: 1, max_sample_interval: 1 },
+    ] })).toEqual(expect.arrayContaining([
+      "Unexpected current-day health canary domain: dom_extra",
+      expect.stringContaining("one.example: current-day scheduled canaries=2"),
+      expect.stringContaining("two.example: current-day scheduled canaries=0"),
+      expect.stringContaining("one.example: current-day health canary query is sampled at 5"),
+    ]));
+  });
+
+  it("does not require current-day Analytics reads before the first grace deadline", () => {
+    expect(currentDayCanaryIssues({ schedule: { requiredByNowPerDomain: 0, domains: [] }, rows: null })).toEqual([]);
   });
 });
