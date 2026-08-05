@@ -11,6 +11,7 @@ function baseline(overrides = {}) {
       "domain-monetizer-site-edge": [],
     },
     d1Databases: ["domain-monetizer"],
+    d1DatabaseSizes: [{ name: "domain-monetizer", bytes: 643072 }],
     kvNamespaces: ["domain-monetizer-site-config"],
     queues: [],
     accessApps: [{ name: "DomainMonetizer Admin", domain: "admin.multibrands.net", type: "self_hosted" }],
@@ -47,5 +48,31 @@ describe("Cloudflare free pilot contract", () => {
       expect.stringContaining("positive-price"),
       expect.stringContaining("r2_bucket"),
     ]));
+  });
+
+  it("fails before D1 growth can silently consume the free database limit", () => {
+    const inventory = baseline({
+      d1DatabaseSizes: [{ name: "domain-monetizer", bytes: 50 * 1024 * 1024 + 1 }],
+    });
+    expect(evaluateProjectContract(inventory)).toEqual([
+      expect.stringContaining("50 MiB pilot guard"),
+    ]);
+  });
+
+  it("fails closed when the D1 size cannot be verified", () => {
+    const inventory = baseline({
+      d1DatabaseSizes: [{ name: "domain-monetizer", bytes: null }],
+    });
+    expect(evaluateProjectContract(inventory)).toEqual([
+      expect.stringContaining("size unavailable"),
+    ]);
+  });
+
+  it("fails closed when the D1 size inventory is omitted", () => {
+    const inventory = baseline();
+    delete inventory.d1DatabaseSizes;
+    expect(evaluateProjectContract(inventory)).toEqual([
+      expect.stringContaining("size is unavailable"),
+    ]);
   });
 });

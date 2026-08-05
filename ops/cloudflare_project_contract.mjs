@@ -5,6 +5,7 @@ export const expectedProjectContract = Object.freeze({
     "domain-monetizer-site-edge": [],
   },
   d1Databases: ["domain-monetizer"],
+  pilotMaxD1DatabaseBytes: 50 * 1024 * 1024,
   kvNamespaces: ["domain-monetizer-site-config"],
   accessApps: [{ name: "DomainMonetizer Admin", domain: "admin.multibrands.net", type: "self_hosted" }],
 });
@@ -60,6 +61,20 @@ export function evaluateProjectContract(inventory) {
   }
   if (!sameStrings(inventory.d1Databases, expectedProjectContract.d1Databases)) {
     issues.push(`Project D1 databases differ from the pilot contract (observed ${sorted(inventory.d1Databases).join(", ") || "none"})`);
+  }
+  const databaseSizes = inventory.d1DatabaseSizes ?? [];
+  const missingDatabaseSizes = expectedProjectContract.d1Databases
+    .filter((name) => !databaseSizes.some((database) => database.name === name));
+  if (missingDatabaseSizes.length) {
+    issues.push(`Project D1 database size is unavailable (${sorted(missingDatabaseSizes).join(", ")})`);
+  }
+  const oversizedDatabases = databaseSizes
+    .filter((database) => database.bytes === null || database.bytes > expectedProjectContract.pilotMaxD1DatabaseBytes)
+    .map((database) => database.bytes === null
+      ? `${database.name}:size unavailable`
+      : `${database.name}:${database.bytes} bytes`);
+  if (oversizedDatabases.length) {
+    issues.push(`Project D1 database size exceeds the 50 MiB pilot guard or is unavailable (${sorted(oversizedDatabases).join(", ")})`);
   }
   if (!sameStrings(inventory.kvNamespaces, expectedProjectContract.kvNamespaces)) {
     issues.push(`Project KV namespaces differ from the pilot contract (observed ${sorted(inventory.kvNamespaces).join(", ") || "none"})`);

@@ -12,7 +12,7 @@ The live account was audited on `2026-08-05` Singapore time through both the Clo
 - `Beta Analytics Engine API`: active at `$0.00/month`.
 - Four zones used by this project: Cloudflare Free Plan.
 - Two Workers: `domain-monetizer-site-edge` and `domain-monetizer-control`.
-- One D1 database, approximately `0.4 MB` at audit time.
+- One D1 database, approximately `0.6 MB` at the 2026-08-05 audit.
 - One KV namespace, one Analytics Engine dataset, two Cron schedules, one Access app, and zero Queues.
 - No R2 binding, Workers AI binding, Workflow, Durable Object, or external VPS.
 
@@ -44,7 +44,13 @@ Run this read-only command from the repository root:
 pnpm audit:cloudflare-costs
 ```
 
-The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found, any required inventory read cannot be proven, or the project differs from the committed free-pilot contract: exactly two Workers, the two expected control schedules, one D1 database, one KV namespace, one protected admin app, no project Queue, and no paid or out-of-scope Worker binding. The account is shared, so a billing failure requires attribution in the Cloudflare Billing page before changing anything. An intentional architecture change requires updating this contract in the same reviewed change.
+The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found, any required inventory read cannot be proven, or the project differs from the committed free-pilot contract: exactly two Workers, the two expected control schedules, one D1 database no larger than the `50 MiB` pilot guard, one KV namespace, one protected admin app, no project Queue, and no paid or out-of-scope Worker binding. The account is shared, so a billing failure requires attribution in the Cloudflare Billing page before changing anything. An intentional architecture change requires updating this contract in the same reviewed change.
+
+## D1 growth boundary
+
+Cloudflare currently limits a Workers Free D1 database to `500 MB`. The live 2026-08-05 sample measured an average immutable release snapshot of `9,471.5 bytes` and an average content version of `3,006.7 bytes`. At the pilot's current depth of seven releases and five content versions, that is about `81 KB` of version payload per domain before indexes, audit history, readiness checks, and daily metrics. Keeping every version forever is therefore not a scale-safe retention policy.
+
+The `50 MiB` contract guard is an early pilot alarm, not a capacity target. Before publishing more than 1,000 domains, measure the then-current per-domain footprint and choose one of two explicit paths: retain only a bounded number of superseded releases and content versions while preserving every active pointer, or move the control database to a paid capacity plan. Keep at least 25% database headroom after accounting for telemetry and indexes. See Cloudflare's current [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
 
 Run the audit:
 

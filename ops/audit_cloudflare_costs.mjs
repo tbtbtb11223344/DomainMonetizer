@@ -116,7 +116,7 @@ const sanitizedSubscriptions = arrayResult(subscriptions).map((subscription) => 
 const billableSubscriptions = sanitizedSubscriptions.filter((subscription) => subscription.price > 0);
 const projectDatabases = arrayResult(databases)
   .filter((database) => database.name?.startsWith(projectPrefix))
-  .map((database) => ({ name: database.name, bytes: database.file_size || null }));
+  .map((database) => ({ name: database.name, bytes: database.file_size ?? null }));
 const projectNamespaces = arrayResult(namespaces)
   .filter((namespace) => namespace.title?.startsWith(projectPrefix))
   .map((namespace) => namespace.title);
@@ -132,6 +132,7 @@ const contractIssues = evaluateProjectContract({
   workers: projectWorkers.map((worker) => worker.id),
   schedules: projectSchedules,
   d1Databases: projectDatabases.map((database) => database.name),
+  d1DatabaseSizes: projectDatabases,
   kvNamespaces: projectNamespaces,
   queues: projectQueues,
   accessApps: projectAccessApps,
