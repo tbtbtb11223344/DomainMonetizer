@@ -43,10 +43,14 @@ describe("core contracts", () => {
     expect(html).toContain('data-offer="enabled"');
     expect(html).toContain('class="mobile-action"');
     expect(html).toContain('href="/go/primary"');
-    expect(html).toContain('href="/__dm/site-v2.css?rev=tenant-marks-1"');
+    expect(html).toContain('href="/__dm/site-v2.css?rev=natural-guide-1"');
     expect(html).toContain('href="/__dm/assets/site-mark.svg?rev=rel_1"');
     expect(html).toContain('srcset="/__dm/assets/home-services-hero-960.webp 960w, /__dm/assets/home-services-hero.webp 1122w"');
-    expect(html).toContain('src="/__dm/site-v2.js?rev=tenant-marks-1"');
+    expect(html).toContain('src="/__dm/site-v2.js?rev=natural-guide-1"');
+    expect(html).toContain('aria-label="Guide sections"');
+    expect(html).toContain('href="#what-to-ask"');
+    expect(html).toContain('id="before-you-call"');
+    expect(html).toContain('id="common-questions"');
     expect(html).not.toContain("<script>");
   });
 
@@ -54,12 +58,17 @@ describe("core contracts", () => {
     expect(guideBrandInitials(content)).toBe("TA");
     expect(siteMarkSvg(content)).toContain(">TA</text>");
     expect(siteMarkSvg(content)).not.toContain("<path");
+    expect(siteMarkSvg({ ...content, vertical: "HVAC" })).toContain('stroke="#74cde0"');
+    expect(siteMarkSvg({ ...content, vertical: "roof coating" })).toContain('fill="#21332f"');
   });
 
   it("renders an honest non-interactive status when matching is disabled", () => {
     const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_2", offerEnabled: false });
     expect(html).toContain('data-offer="disabled"');
     expect(html).toContain("Matching is still being set up in Tulsa.");
+    expect(html).toContain("Start with the local guide");
+    expect(html).toContain("Not a service provider");
+    expect(html).toContain("Independent guide");
     expect(html).not.toContain('class="mobile-action"');
     expect(html).not.toContain('class="mast-cta"');
     expect(html).not.toContain('href="/go/primary"');
@@ -72,8 +81,8 @@ describe("core contracts", () => {
       releaseId: "rel_hvac",
       offerEnabled: false,
     });
-    expect(html).toContain("nearby HVAC needs");
-    expect(html).toContain("find HVAC help");
-    expect(html).not.toContain("nearby hvac needs");
+    expect(html).toContain("HVAC guidance for Tulsa");
+    expect(html).toContain("compare HVAC options");
+    expect(html).not.toContain("compare hvac options");
   });
 });

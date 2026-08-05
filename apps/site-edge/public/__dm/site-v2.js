@@ -14,6 +14,21 @@
   updateMast();
   window.addEventListener("scroll", updateMast, { passive: true });
 
+  const sectionLinks = [...document.querySelectorAll(".mast-nav a[href^='#']")];
+  const updateSectionNav = () => {
+    let currentId = "";
+    for (const link of sectionLinks) {
+      const target = document.querySelector(link.getAttribute("href"));
+      if (target && target.getBoundingClientRect().top <= window.innerHeight * 0.38) currentId = target.id;
+    }
+    sectionLinks.forEach((link) => {
+      if (link.getAttribute("href") === `#${currentId}`) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  };
+  updateSectionNav();
+  window.addEventListener("scroll", updateSectionNav, { passive: true });
+
   const reveal = document.querySelectorAll("[data-reveal]");
   if ("IntersectionObserver" in window) {
     const observer = new IntersectionObserver((entries) => {
