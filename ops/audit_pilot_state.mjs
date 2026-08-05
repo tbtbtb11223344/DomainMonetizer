@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { pilotDecision } from "./pilot_decision.mjs";
 
 function parseEnv(source) {
   const values = {};
@@ -186,6 +187,7 @@ const report = {
     evidenceStatus: overview.evidenceStatus,
     reviewBlockers: overview.reviewBlockers,
     totals: overview.totals,
+    domainTotals: overview.domains,
     health: overview.health,
     currentDaySchedule: overview.currentDaySchedule,
     sampling: overview.sampling,
@@ -193,6 +195,7 @@ const report = {
     monetization: overview.monetization,
     latestRun: overview.latestRun,
   },
+  decision: pilotDecision({ guard: issues.length ? "FAIL" : "PASS", evidenceStatus: overview.evidenceStatus }),
   issues,
   notes: [
     "This audit uses only protected control-plane reads and /readyz; it does not create visitor views.",
