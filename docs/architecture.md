@@ -16,7 +16,7 @@ flowchart LR
   C --> R[(R2 assets, optional)]
 ```
 
-Portfolio apex domains are added as individual full Cloudflare zones and connected to the same `site-edge` Worker as custom domains. This avoids the CNAME-at-apex limitation of the standard Cloudflare for SaaS path without paying for Enterprise apex proxying. The operating model is still one application: additional zones add routing configuration, not deployments or per-domain code.
+Portfolio apex domains are added as individual full Cloudflare zones and connected to the same `site-edge` Worker as custom domains. DomainMonetizer stores each zone ID, the exact Cloudflare-assigned nameserver pair, and the last verification timestamp on the domain row; the Cloudflare API remains authoritative and metadata is updated only after an exact live readback. This avoids the CNAME-at-apex limitation of the standard Cloudflare for SaaS path without paying for Enterprise apex proxying. The operating model is still one application: additional zones add routing configuration, not deployments or per-domain code.
 
 That topology has a deliberate scale boundary. Cloudflare currently allows one Worker to be routed to at most 1,000 zones, so the current Worker must not approach that ceiling without a new routing decision. Keep at least 10% route headroom. The recommended path is:
 

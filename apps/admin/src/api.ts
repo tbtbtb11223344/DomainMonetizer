@@ -13,6 +13,9 @@ export interface DomainSummary {
   traffic30dVisitors: number | null;
   parking30dRevenueUsd: number | null;
   trafficEvidenceAt: string | null;
+  cloudflareZoneId: string | null;
+  assignedNameservers: string[];
+  nameserversVerifiedAt: string | null;
   activeReleaseId: string | null;
   updatedAt: string;
 }

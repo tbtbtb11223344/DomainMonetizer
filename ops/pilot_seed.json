@@ -12,7 +12,9 @@
       "aiKeywords": ["appliance repair", "appliance parts", "Denton", "Texas"],
       "traffic30dVisitors": 11,
       "parking30dRevenueUsd": 0,
-      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z",
+      "cloudflareZoneId": "dc09a5b8621f1c129446433acfad032b",
+      "assignedNameservers": ["mia.ns.cloudflare.com", "micah.ns.cloudflare.com"]
     },
     {
       "hostname": "heavenlyaircondition.com",
@@ -26,7 +28,9 @@
       "aiKeywords": ["HVAC", "air conditioning", "Austin", "Pflugerville", "Texas"],
       "traffic30dVisitors": 8,
       "parking30dRevenueUsd": 0,
-      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z",
+      "cloudflareZoneId": "fad7870ec755b322ff8c3059fef22901",
+      "assignedNameservers": ["mia.ns.cloudflare.com", "micah.ns.cloudflare.com"]
     },
     {
       "hostname": "phoenixroofcoating.net",
@@ -40,7 +44,9 @@
       "aiKeywords": ["roof coating", "roof repair", "waterproofing", "Phoenix", "Arizona"],
       "traffic30dVisitors": 6,
       "parking30dRevenueUsd": 0,
-      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z"
+      "trafficEvidenceAt": "2026-08-05T00:00:00.000Z",
+      "cloudflareZoneId": "353265c935cf236f5b33b3fea0f7391c",
+      "assignedNameservers": ["mia.ns.cloudflare.com", "micah.ns.cloudflare.com"]
     }
   ],
   "content": {

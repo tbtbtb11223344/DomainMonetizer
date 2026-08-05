@@ -85,6 +85,18 @@ export const releaseSnapshotSchema = z.object({
 
 export type ReleaseSnapshot = z.infer<typeof releaseSnapshotSchema>;
 
+const cloudflareZoneIdSchema = z.string().trim().toLowerCase().regex(/^[a-f0-9]{32}$/, "Invalid Cloudflare zone ID");
+
+export const assignedNameserversSchema = z
+  .array(hostnameSchema)
+  .length(2, "Exactly two assigned nameservers are required")
+  .refine((nameservers) => new Set(nameservers).size === nameservers.length, "Assigned nameservers must be unique");
+
+export const cloudflareZoneMetadataSchema = z.object({
+  cloudflareZoneId: cloudflareZoneIdSchema,
+  assignedNameservers: assignedNameserversSchema,
+});
+
 export const domainImportSchema = z.object({
   hostname: hostnameSchema,
   registrar: z.string().max(80).nullable().optional(),
@@ -98,6 +110,18 @@ export const domainImportSchema = z.object({
   traffic30dVisitors: z.number().int().min(0).nullable().optional(),
   parking30dRevenueUsd: z.number().min(0).nullable().optional(),
   trafficEvidenceAt: z.string().datetime().nullable().optional(),
+  cloudflareZoneId: cloudflareZoneIdSchema.optional(),
+  assignedNameservers: assignedNameserversSchema.optional(),
+}).superRefine((domain, context) => {
+  const hasZoneId = domain.cloudflareZoneId !== undefined;
+  const hasNameservers = domain.assignedNameservers !== undefined;
+  if (hasZoneId !== hasNameservers) {
+    context.addIssue({
+      code: "custom",
+      path: hasZoneId ? ["assignedNameservers"] : ["cloudflareZoneId"],
+      message: "Cloudflare zone ID and assigned nameservers must be supplied together",
+    });
+  }
 });
 
 export type DomainImport = z.infer<typeof domainImportSchema>;

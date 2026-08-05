@@ -96,6 +96,7 @@ const environment = await loadEnvironment();
 const baseUrl = (environment.CONTROL_URL || "https://admin.multibrands.net").replace(/\/$/u, "");
 const pilotSeed = JSON.parse(await readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"));
 const expectedHostnames = pilotSeed.domains.map((domain) => domain.hostname).sort();
+const expectedByHostname = new Map(pilotSeed.domains.map((domain) => [domain.hostname, domain]));
 const headers = accessHeaders(environment);
 
 const [domainsResult, overviewResult] = await Promise.all([
@@ -118,6 +119,7 @@ const issues = [];
 
 for (const hostname of expectedHostnames) {
   const domain = inventoryByHostname.get(hostname);
+  const expected = expectedByHostname.get(hostname);
   if (!domain) {
     issues.push(`${hostname}: missing from the control-plane inventory`);
     continue;
@@ -129,6 +131,17 @@ for (const hostname of expectedHostnames) {
   }
   if (domain.lifecycleStatus !== "published" || !domain.activeReleaseId) {
     issues.push(`${hostname}: no published active release`);
+  }
+  if (domain.cloudflareZoneId !== expected.cloudflareZoneId) {
+    issues.push(`${hostname}: stored Cloudflare zone ID does not match the approved assignment`);
+  }
+  const storedNameservers = [...new Set((domain.assignedNameservers ?? []).map((value) => String(value).toLowerCase()))].sort();
+  const expectedNameservers = [...new Set((expected.assignedNameservers ?? []).map((value) => String(value).toLowerCase()))].sort();
+  if (JSON.stringify(storedNameservers) !== JSON.stringify(expectedNameservers)) {
+    issues.push(`${hostname}: stored assigned nameservers do not match the approved assignment`);
+  }
+  if (!domain.nameserversVerifiedAt || Number.isNaN(Date.parse(domain.nameserversVerifiedAt))) {
+    issues.push(`${hostname}: Cloudflare nameserver verification timestamp is missing or invalid`);
   }
 }
 

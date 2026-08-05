@@ -10,6 +10,8 @@ describe("pilot seed", () => {
       const parsedDomain = domainImportSchema.parse(domain);
       expect(parsedDomain.sourceLabels.map((label) => label.toLowerCase())).not.toContain("traffic2");
       expect(parsedDomain.sourceLabels).toContain("DomainMonetizer");
+      expect(parsedDomain.cloudflareZoneId).toMatch(/^[a-f0-9]{32}$/);
+      expect(parsedDomain.assignedNameservers).toEqual(["mia.ns.cloudflare.com", "micah.ns.cloudflare.com"]);
       const rawContent = seed.content[domain.hostname as keyof typeof seed.content];
       expect(rawContent).not.toHaveProperty("brandName");
       const content = contentSchema.parse(rawContent);
@@ -22,5 +24,13 @@ describe("pilot seed", () => {
       expect(content.disclosure).toMatch(/^This website is an independent information and referral guide\./);
     }
     expect(imagePaths.size).toBe(3);
+  });
+
+  it("requires Cloudflare zone IDs and assigned nameservers together", () => {
+    const domain = seed.domains[0]!;
+    const { assignedNameservers: _assignedNameservers, ...missingNameservers } = domain;
+    const { cloudflareZoneId: _cloudflareZoneId, ...missingZoneId } = domain;
+    expect(domainImportSchema.safeParse(missingNameservers).success).toBe(false);
+    expect(domainImportSchema.safeParse(missingZoneId).success).toBe(false);
   });
 });

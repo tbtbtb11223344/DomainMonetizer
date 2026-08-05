@@ -16,6 +16,7 @@
 ```powershell
 pnpm check
 pnpm exec wrangler d1 migrations apply domain-monetizer --local --config apps/control/wrangler.jsonc
+pnpm sync:cloudflare-zones
 pnpm --filter @domain-monetizer/site-edge dev
 pnpm --filter @domain-monetizer/control dev
 ```
@@ -62,6 +63,8 @@ python ops/collect_pilot_evidence.py `
 ```
 
 `preview.multibrands.net` is a seven-day KV alias of one approved release. It is not a portfolio record and must never be imported into the domains table. Publishing a preview does not change the selected domain's DNS.
+
+After creating or reviewing a Cloudflare zone, record its assignment with `pnpm sync:cloudflare-zones`. The command reads each approved zone directly from Cloudflare, fails closed if its zone ID or assigned pair differs from `ops/pilot_seed.json`, writes the verified metadata through the authenticated control API, and checks the API readback. It never changes registrar delegation or Cloudflare DNS.
 
 ## Scheduled evidence and readiness
 

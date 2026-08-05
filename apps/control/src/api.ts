@@ -1,6 +1,7 @@
 import {
   activePointerKey,
   compileHomeServicesHtml,
+  cloudflareZoneMetadataSchema,
   contentMutationSchema,
   contentSchema,
   domainImportSchema,
@@ -49,7 +50,7 @@ function jsonValue<T>(raw: string, fallback: T): T {
   }
 }
 
-function publicDomain(row: DomainRow): Record<string, unknown> {
+export function publicDomain(row: DomainRow): Record<string, unknown> {
   return {
     id: row.id,
     hostname: row.hostname,
@@ -66,6 +67,9 @@ function publicDomain(row: DomainRow): Record<string, unknown> {
     traffic30dVisitors: row.traffic_30d_visitors,
     parking30dRevenueUsd: row.parking_30d_revenue_usd,
     trafficEvidenceAt: row.traffic_evidence_at,
+    cloudflareZoneId: row.cloudflare_zone_id,
+    assignedNameservers: jsonValue(row.assigned_nameservers_json, []),
+    nameserversVerifiedAt: row.nameservers_verified_at,
     activeReleaseId: row.active_release_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -326,8 +330,8 @@ export function mountApi(app: App): void {
     for (const domain of body.data.domains) {
       const id = randomId("dom");
       statements.push(
-        c.env.DB.prepare("INSERT INTO domains (id, hostname, lifecycle_status, registrar, source_type, source_status, source_labels_json, vertical, country, ai_summary, ai_keywords_json, traffic_30d_visitors, parking_30d_revenue_usd, traffic_evidence_at, created_at, updated_at) VALUES (?, ?, 'draft', ?, 'parking', 'available', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hostname) DO UPDATE SET registrar=excluded.registrar, source_type=excluded.source_type, source_status=excluded.source_status, source_labels_json=excluded.source_labels_json, vertical=excluded.vertical, country=excluded.country, ai_summary=excluded.ai_summary, ai_keywords_json=excluded.ai_keywords_json, traffic_30d_visitors=excluded.traffic_30d_visitors, parking_30d_revenue_usd=excluded.parking_30d_revenue_usd, traffic_evidence_at=excluded.traffic_evidence_at, updated_at=excluded.updated_at")
-          .bind(id, domain.hostname, domain.registrar ?? null, JSON.stringify(domain.sourceLabels), domain.vertical ?? null, domain.country ?? null, domain.aiSummary ?? null, JSON.stringify(domain.aiKeywords), domain.traffic30dVisitors ?? null, domain.parking30dRevenueUsd ?? null, domain.trafficEvidenceAt ?? null, timestamp, timestamp),
+        c.env.DB.prepare("INSERT INTO domains (id, hostname, lifecycle_status, registrar, source_type, source_status, source_labels_json, vertical, country, ai_summary, ai_keywords_json, traffic_30d_visitors, parking_30d_revenue_usd, traffic_evidence_at, cloudflare_zone_id, assigned_nameservers_json, nameservers_verified_at, created_at, updated_at) VALUES (?, ?, 'draft', ?, 'parking', 'available', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hostname) DO UPDATE SET registrar=excluded.registrar, source_type=excluded.source_type, source_status=excluded.source_status, source_labels_json=excluded.source_labels_json, vertical=excluded.vertical, country=excluded.country, ai_summary=excluded.ai_summary, ai_keywords_json=excluded.ai_keywords_json, traffic_30d_visitors=excluded.traffic_30d_visitors, parking_30d_revenue_usd=excluded.parking_30d_revenue_usd, traffic_evidence_at=excluded.traffic_evidence_at, cloudflare_zone_id=COALESCE(excluded.cloudflare_zone_id, domains.cloudflare_zone_id), assigned_nameservers_json=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.assigned_nameservers_json ELSE excluded.assigned_nameservers_json END, nameservers_verified_at=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.nameservers_verified_at ELSE excluded.nameservers_verified_at END, updated_at=excluded.updated_at")
+          .bind(id, domain.hostname, domain.registrar ?? null, JSON.stringify(domain.sourceLabels), domain.vertical ?? null, domain.country ?? null, domain.aiSummary ?? null, JSON.stringify(domain.aiKeywords), domain.traffic30dVisitors ?? null, domain.parking30dRevenueUsd ?? null, domain.trafficEvidenceAt ?? null, domain.cloudflareZoneId ?? null, JSON.stringify(domain.assignedNameservers ?? []), domain.cloudflareZoneId ? timestamp : null, timestamp, timestamp),
         auditStatement(c.env.DB, { actor, action: "domain.import", entityType: "domain", entityId: domain.hostname, requestId, after: domain }),
       );
       imported.push(domain.hostname);
@@ -349,6 +353,28 @@ export function mountApi(app: App): void {
     const telemetryHealth = await c.env.DB.prepare("SELECT metric_date,expected_canaries,observed_canaries,canary_sample_interval,verified,updated_at FROM daily_domain_telemetry_health WHERE domain_id=? ORDER BY metric_date DESC LIMIT 30").bind(domain.id).all();
     const healthChecks = await c.env.DB.prepare("SELECT status,http_status,latency_ms,expected_release_id,observed_release_id,error_message,checked_at,check_source FROM tenant_health_checks WHERE domain_id=? ORDER BY checked_at DESC LIMIT 20").bind(domain.id).all();
     return c.json({ domain: publicDomain(domain), contents: contents.results, releases: releases.results, metrics: metrics.results, countryMetrics: countryMetrics.results, sourceMetrics: sourceMetrics.results, intentMetrics: intentMetrics.results, contextMetrics: contextMetrics.results, telemetryHealth: telemetryHealth.results, healthChecks: healthChecks.results });
+  });
+
+  app.post("/api/domains/:hostname/cloudflare-zone", async (c) => {
+    const domain = await domainByHostname(c.env.DB, c.req.param("hostname"));
+    if (!domain) return c.json({ error: "Domain not found" }, 404);
+    const parsed = cloudflareZoneMetadataSchema.safeParse(await c.req.json<unknown>().catch(() => null));
+    if (!parsed.success) return c.json(zodError(parsed.error), 400);
+    const timestamp = nowIso();
+    const before = {
+      cloudflareZoneId: domain.cloudflare_zone_id,
+      assignedNameservers: jsonValue(domain.assigned_nameservers_json, []),
+      nameserversVerifiedAt: domain.nameservers_verified_at,
+    };
+    const after = { ...parsed.data, nameserversVerifiedAt: timestamp };
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE domains SET cloudflare_zone_id=?, assigned_nameservers_json=?, nameservers_verified_at=?, updated_at=? WHERE id=?")
+        .bind(parsed.data.cloudflareZoneId, JSON.stringify(parsed.data.assignedNameservers), timestamp, timestamp, domain.id),
+      auditStatement(c.env.DB, { actor: c.get("actor"), action: "domain.cloudflare_zone.verify", entityType: "domain", entityId: domain.id, requestId: c.get("requestId"), before, after }),
+    ]);
+    const updated = await domainById(c.env.DB, domain.id);
+    if (!updated) return c.json({ error: "Domain metadata update could not be read back" }, 500);
+    return c.json({ domain: publicDomain(updated) });
   });
 
   app.post("/api/domains/:hostname/content", async (c) => {

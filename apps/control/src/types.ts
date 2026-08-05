@@ -39,6 +39,9 @@ export interface DomainRow {
   traffic_30d_visitors: number | null;
   parking_30d_revenue_usd: number | null;
   traffic_evidence_at: string | null;
+  cloudflare_zone_id: string | null;
+  assigned_nameservers_json: string;
+  nameservers_verified_at: string | null;
   active_release_id: string | null;
   created_at: string;
   updated_at: string;
