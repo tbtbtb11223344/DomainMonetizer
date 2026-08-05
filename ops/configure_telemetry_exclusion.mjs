@@ -96,13 +96,17 @@ async function pilotHostnames() {
 }
 
 async function verifyHost(hostname) {
-  const response = await fetch(`https://${hostname}/`, {
-    method: "HEAD",
-    redirect: "manual",
-    headers: { "User-Agent": "DomainMonetizer-telemetry-exclusion-verifier/1.0" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  return response.ok && response.headers.get("X-DM-Telemetry") === "excluded";
+  try {
+    const response = await fetch(`https://${hostname}/`, {
+      method: "HEAD",
+      redirect: "manual",
+      headers: { "User-Agent": "DomainMonetizer-telemetry-exclusion-verifier/1.0" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    return response.ok && response.headers.get("X-DM-Telemetry") === "excluded";
+  } catch {
+    return false;
+  }
 }
 
 async function verifyExclusion() {
