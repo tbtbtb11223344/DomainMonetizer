@@ -15,6 +15,16 @@ function baseline(overrides = {}) {
     kvNamespaces: ["domain-monetizer-site-config"],
     queues: [],
     accessApps: [{ name: "DomainMonetizer Admin", domain: "admin.multibrands.net", type: "self_hosted" }],
+    workerDomains: [
+      { hostname: "admin.multibrands.net", service: "domain-monetizer-control", environment: "production" },
+      { hostname: "heavenlyaircondition.com", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "mcneillsappliance.com", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "phoenixroofcoating.net", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "preview.multibrands.net", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "www.heavenlyaircondition.com", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "www.mcneillsappliance.com", service: "domain-monetizer-site-edge", environment: "production" },
+      { hostname: "www.phoenixroofcoating.net", service: "domain-monetizer-site-edge", environment: "production" },
+    ],
     workerBindings: [
       { worker: "domain-monetizer-control", bindings: [{ name: "DB", type: "d1" }] },
       { worker: "domain-monetizer-site-edge", bindings: [{ name: "EVENTS", type: "analytics_engine" }] },
@@ -73,6 +83,14 @@ describe("Cloudflare free pilot contract", () => {
     delete inventory.d1DatabaseSizes;
     expect(evaluateProjectContract(inventory)).toEqual([
       expect.stringContaining("size is unavailable"),
+    ]);
+  });
+
+  it("rejects an unexpected Worker custom domain", () => {
+    const inventory = baseline();
+    inventory.workerDomains.push({ hostname: "unexpected.example", service: "domain-monetizer-site-edge", environment: "production" });
+    expect(evaluateProjectContract(inventory)).toEqual([
+      expect.stringContaining("Worker domains differ"),
     ]);
   });
 });

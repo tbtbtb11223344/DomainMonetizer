@@ -73,13 +73,14 @@ const { accountId, apiToken } = await loadCredentials();
 const warnings = [];
 
 const subscriptions = await cloudflare(`/accounts/${accountId}/subscriptions`, apiToken);
-const [workers, databases, namespaces, queues, accessApps, workerSettings] = await Promise.all([
+const [workers, databases, namespaces, queues, accessApps, workerSettings, workerDomains] = await Promise.all([
   cloudflare(`/accounts/${accountId}/workers/scripts`, apiToken),
   cloudflare(`/accounts/${accountId}/d1/database`, apiToken),
   cloudflare(`/accounts/${accountId}/storage/kv/namespaces`, apiToken),
   optionalCloudflare("Queues inventory unavailable", `/accounts/${accountId}/queues`, apiToken, warnings),
   optionalCloudflare("Access inventory unavailable", `/accounts/${accountId}/access/apps`, apiToken, warnings),
   optionalCloudflare("Workers account settings unavailable", `/accounts/${accountId}/workers/account-settings`, apiToken, warnings),
+  cloudflare(`/accounts/${accountId}/workers/domains/records`, apiToken),
 ]);
 
 const projectWorkers = arrayResult(workers).filter((worker) => worker.id?.startsWith(projectPrefix));
@@ -126,6 +127,14 @@ const projectQueues = arrayResult(queues)
 const projectAccessApps = arrayResult(accessApps)
   .filter((app) => app.name?.toLowerCase().includes("domainmonetizer"))
   .map((app) => ({ name: app.name, domain: app.domain, type: app.type }));
+const projectWorkerDomains = arrayResult(workerDomains)
+  .filter((domain) => domain.service?.startsWith(projectPrefix))
+  .map((domain) => ({
+    hostname: domain.hostname,
+    service: domain.service,
+    environment: domain.environment || "production",
+    zoneId: domain.zone_id || null,
+  }));
 const contractIssues = evaluateProjectContract({
   billableSubscriptions,
   warnings,
@@ -136,6 +145,7 @@ const contractIssues = evaluateProjectContract({
   kvNamespaces: projectNamespaces,
   queues: projectQueues,
   accessApps: projectAccessApps,
+  workerDomains: projectWorkerDomains,
   workerBindings: projectWorkerBindings,
 });
 
@@ -153,6 +163,7 @@ const report = {
     kvNamespaces: projectNamespaces,
     queues: projectQueues,
     accessApps: projectAccessApps,
+    workerDomains: projectWorkerDomains,
     workersUsageModelLabel: workerSettings?.default_usage_model || "unavailable",
     workerBindings: projectWorkerBindings,
   },

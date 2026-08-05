@@ -18,6 +18,14 @@ flowchart LR
 
 Portfolio apex domains are added as individual full Cloudflare zones and connected to the same `site-edge` Worker as custom domains. This avoids the CNAME-at-apex limitation of the standard Cloudflare for SaaS path without paying for Enterprise apex proxying. The operating model is still one application: additional zones add routing configuration, not deployments or per-domain code.
 
+That topology has a deliberate scale boundary. Cloudflare currently allows one Worker to be routed to at most 1,000 zones, so the current Worker must not approach that ceiling without a new routing decision. Keep at least 10% route headroom. The recommended path is:
+
+1. Keep individual full zones for the pilot and the first evidence-backed expansion. This is the cheapest and simplest apex-domain topology while the portfolio is well below the route ceiling.
+2. Before 900 routed zones, run a same-account canary migration to standard Cloudflare for SaaS using a Cloudflare-hosted apex CNAME, which is flattened automatically. Verify hostname and certificate activation, request routing, telemetry, rollback, and monthly billing with one non-pilot domain.
+3. If that canary succeeds and measured domain economics comfortably absorb the hostname fee, use Cloudflare for SaaS as the preferred multi-thousand-domain routing plane. If the fee is uneconomic, the fallback is identical Worker shards with deterministic zone ownership, coordinated releases, and cross-shard health reporting; this is cheaper but operationally riskier.
+
+Cloudflare for SaaS currently includes 100 custom hostnames, supports up to 50,000 on non-Enterprise plans, and charges `$0.10` per additional hostname per month. Neither migration path is authorized by a traffic-only `review_ready` result: projected economics, an exact batch size, a current limit/cost audit, and explicit user approval are required first.
+
 The public Worker has no D1, Cloudflare API, provider, or admin credentials. The control Worker is the sole writer and is unavailable to the public except for narrowly authenticated internal endpoints and future signed provider postbacks.
 
 Shared liveness and tenant readiness are deliberately separate. `/healthz` proves the Worker runtime is responding; `/readyz` additionally resolves the request hostname through the active KV pointer and validates the release snapshot. Tenant readiness is `200` only for a live release and `503` for a missing, malformed, unavailable, or paused tenant. Neither probe records a visitor event. An authenticated control-plane readiness request writes a separate `health_canary` Analytics Engine event; it has no visitor identifier and is excluded from every traffic query.

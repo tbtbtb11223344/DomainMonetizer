@@ -8,6 +8,16 @@ export const expectedProjectContract = Object.freeze({
   pilotMaxD1DatabaseBytes: 50 * 1024 * 1024,
   kvNamespaces: ["domain-monetizer-site-config"],
   accessApps: [{ name: "DomainMonetizer Admin", domain: "admin.multibrands.net", type: "self_hosted" }],
+  workerDomains: [
+    { hostname: "admin.multibrands.net", service: "domain-monetizer-control", environment: "production" },
+    { hostname: "heavenlyaircondition.com", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "mcneillsappliance.com", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "phoenixroofcoating.net", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "preview.multibrands.net", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "www.heavenlyaircondition.com", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "www.mcneillsappliance.com", service: "domain-monetizer-site-edge", environment: "production" },
+    { hostname: "www.phoenixroofcoating.net", service: "domain-monetizer-site-edge", environment: "production" },
+  ],
 });
 
 const forbiddenBindingTypes = new Set([
@@ -39,6 +49,10 @@ function sameStrings(actual, expected) {
 
 function appKey(app) {
   return `${app.name}|${app.domain}|${app.type}`;
+}
+
+function workerDomainKey(domain) {
+  return `${domain.hostname}|${domain.service}|${domain.environment}`;
 }
 
 export function evaluateProjectContract(inventory) {
@@ -78,6 +92,11 @@ export function evaluateProjectContract(inventory) {
   }
   if (!sameStrings(inventory.kvNamespaces, expectedProjectContract.kvNamespaces)) {
     issues.push(`Project KV namespaces differ from the pilot contract (observed ${sorted(inventory.kvNamespaces).join(", ") || "none"})`);
+  }
+  const actualWorkerDomains = (inventory.workerDomains ?? []).map(workerDomainKey);
+  const expectedWorkerDomains = expectedProjectContract.workerDomains.map(workerDomainKey);
+  if (!sameStrings(actualWorkerDomains, expectedWorkerDomains)) {
+    issues.push(`DomainMonetizer Worker domains differ from the pilot contract (observed ${sorted(actualWorkerDomains).join(", ") || "none"})`);
   }
   if (inventory.queues.length) {
     issues.push(`Unexpected project Queues detected: ${sorted(inventory.queues).join(", ")}`);

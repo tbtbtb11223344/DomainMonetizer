@@ -44,7 +44,7 @@ Run this read-only command from the repository root:
 pnpm audit:cloudflare-costs
 ```
 
-The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found, any required inventory read cannot be proven, or the project differs from the committed free-pilot contract: exactly two Workers, the two expected control schedules, one D1 database no larger than the `50 MiB` pilot guard, one KV namespace, one protected admin app, no project Queue, and no paid or out-of-scope Worker binding. The account is shared, so a billing failure requires attribution in the Cloudflare Billing page before changing anything. An intentional architecture change requires updating this contract in the same reviewed change.
+The script reads the existing Cloudflare API credentials, redacts credentials and billing identity, and prints only plan names/prices plus DomainMonetizer's resource inventory. It exits with code `2` if any positive-price account subscription is found, any required inventory read cannot be proven, or the project differs from the committed free-pilot contract: exactly two Workers, the two expected control schedules, the exact eight admin/preview/pilot Worker hostnames, one D1 database no larger than the `50 MiB` pilot guard, one KV namespace, one protected admin app, no project Queue, and no paid or out-of-scope Worker binding. The account is shared, so a billing failure requires attribution in the Cloudflare Billing page before changing anything. An intentional architecture change requires updating this contract in the same reviewed change.
 
 ## D1 growth boundary
 
@@ -61,6 +61,23 @@ Run the audit:
 5. monthly while the pilot is active.
 
 Publishing domain 21 also requires redesigning the scheduled readiness monitor, whose current 20-domain cap is an intentional Workers Free safety limit.
+
+## Domain-routing scale boundary
+
+The current `site-edge` Worker uses one full Cloudflare zone per portfolio apex. Cloudflare's [Workers limits](https://developers.cloudflare.com/workers/platform/limits/#routes-and-domains) currently allow at most 1,000 routed zones per Worker, so `900` is the maximum planning boundary for this topology, not a target to fill automatically.
+
+Standard [Cloudflare for SaaS plans](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/plans/) include 100 custom hostnames, permit up to 50,000, and charge `$0.10/month` for each additional hostname. Because the portfolio zones already use Cloudflare authoritative DNS, a standard custom-hostname design can use an apex CNAME; Cloudflare [flattens apex CNAMEs automatically](https://developers.cloudflare.com/dns/cname-flattening/set-up-cname-flattening/). This must still be proven with a same-account canary because certificate validation, hostname priority, rollback, and billing are production concerns.
+
+Illustrative hostname charges, excluding every other cost:
+
+| Total hostnames | Monthly Cloudflare for SaaS hostname charge |
+| ---: | ---: |
+| 100 | `$0` |
+| 1,000 | `$90` |
+| 5,000 | `$490` |
+| 10,000 | `$990` |
+
+Do not activate Cloudflare for SaaS or create Worker shards during the three-domain measurement pilot. At a future scale review, compare these charges with measured accepted revenue per valid session and renewal cost. Prefer Cloudflare for SaaS at multi-thousand scale when the unit economics cover it; use Worker shards only when the fee is material enough to justify their greater deployment and rollback complexity.
 
 ## Authorization boundary
 
