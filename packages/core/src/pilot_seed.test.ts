@@ -9,6 +9,7 @@ describe("pilot seed", () => {
     for (const domain of seed.domains) {
       const parsedDomain = domainImportSchema.parse(domain);
       expect(parsedDomain.sourceLabels.map((label) => label.toLowerCase())).not.toContain("traffic2");
+      expect(parsedDomain.sourceLabels).toContain("DomainMonetizer");
       const rawContent = seed.content[domain.hostname as keyof typeof seed.content];
       expect(rawContent).not.toHaveProperty("brandName");
       const content = contentSchema.parse(rawContent);

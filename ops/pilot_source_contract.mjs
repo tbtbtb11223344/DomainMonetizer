@@ -21,7 +21,13 @@ export function evaluatePilotSources(expectedDomains, collected) {
     const riskFlags = Array.isArray(candidate.risk_flags) ? candidate.risk_flags : [];
     if (riskFlags.length) issues.push(`${hostname}: source risk flags are present (${riskFlags.join(", ")})`);
     const labels = Array.isArray(candidate.labels) ? candidate.labels : [];
-    if (labels.some((label) => normalized(label) === "traffic2")) issues.push(`${hostname}: Traffic2 label is present`);
+    const labelKeys = new Set(labels.map(normalized));
+    if (labelKeys.has("traffic2")) issues.push(`${hostname}: Traffic2 label is present`);
+    const missingLabels = (expected.sourceLabels ?? [])
+      .filter((label) => !labelKeys.has(normalized(label)));
+    if (missingLabels.length) {
+      issues.push(`${hostname}: required source label is missing (${missingLabels.join(", ")})`);
+    }
   }
   const expectedSet = new Set(expectedDomains.map((domain) => normalized(domain.hostname)));
   const unexpected = [...candidates.keys()].filter((hostname) => !expectedSet.has(hostname)).sort();

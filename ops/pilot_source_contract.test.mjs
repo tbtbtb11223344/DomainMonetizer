@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { evaluatePilotSources } from "./pilot_source_contract.mjs";
 
-const expected = [{ hostname: "example.com", vertical: "hvac", country: "US" }];
+const expected = [{ hostname: "example.com", vertical: "hvac", country: "US", sourceLabels: ["DomainMonetizer"] }];
 
 describe("pilot source contract", () => {
   it("accepts an exact live source match", () => {
-    expect(evaluatePilotSources(expected, { scored_candidates: [{ domain: "example.com", vertical: "hvac", country_signal: "US", risk_flags: [], labels: [] }] })).toEqual([]);
+    expect(evaluatePilotSources(expected, { scored_candidates: [{ domain: "example.com", vertical: "hvac", country_signal: "US", risk_flags: [], labels: ["DomainMonetizer"] }] })).toEqual([]);
   });
 
   it("fails when a selected domain is no longer source-eligible", () => {
@@ -22,5 +22,11 @@ describe("pilot source contract", () => {
       expect.stringContaining("risk flags"),
       expect.stringContaining("Traffic2"),
     ]));
+  });
+
+  it("fails when the DomainMonetizer protection label is missing", () => {
+    expect(evaluatePilotSources(expected, { scored_candidates: [{ domain: "example.com", vertical: "hvac", country_signal: "US", risk_flags: [], labels: [] }] })).toEqual([
+      "example.com: required source label is missing (DomainMonetizer)",
+    ]);
   });
 });
