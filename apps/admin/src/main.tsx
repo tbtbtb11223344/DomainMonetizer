@@ -220,7 +220,7 @@ function App() {
               const runtimeIssue = Boolean(runtimeHealth?.fresh && !runtimeReady);
               const reliabilityIssue = Boolean(runtimeHealth && !runtimeHealth.reliable);
               return <tr key={domain.id} className={selected === domain.hostname ? "selected" : ""} onClick={() => setSelected(domain.hostname)}>
-              <td><strong>{domain.hostname}</strong><small>{domain.country ?? "Country unverified"}</small></td>
+              <td><div className="hostname-line"><strong>{domain.hostname}</strong><a className="site-link" href={`https://${domain.hostname}`} target="_blank" rel="noopener noreferrer" aria-label={`Open ${domain.hostname} website in a new tab`} title="Open website in new tab" onClick={(event) => event.stopPropagation()}><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" /></svg></a></div><small>{domain.country ?? "Country unverified"}</small></td>
               <td>{domain.vertical ?? "Unclassified"}</td>
               <td><strong>{formatNumber(metric?.unique_visitors ?? 0)}</strong><small>{formatNumber(metric?.likely_human_views ?? 0)} views · {formatNumber(metric?.human_engaged_visits ?? 0)} engaged</small></td>
               <td><strong>{formatNumber(domain.traffic30dVisitors)}</strong><small>{formatMoney(domain.parking30dRevenueUsd)} parking</small></td>

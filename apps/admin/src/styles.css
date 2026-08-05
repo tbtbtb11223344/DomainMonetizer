@@ -361,6 +361,44 @@ td strong {
   text-overflow: ellipsis;
 }
 
+.hostname-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hostname-line strong {
+  min-width: 0;
+}
+
+.site-link {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #747b77;
+  border-radius: 50%;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.site-link svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.site-link:hover,
+.site-link:focus-visible {
+  color: var(--blue);
+  background: #245cff12;
+}
+
 td small {
   display: block;
   color: var(--muted);
@@ -806,6 +844,7 @@ td small.tenant-state.issue {
 .actions button:focus-visible,
 .button:focus-visible,
 .toolbar input:focus-visible,
+.site-link:focus-visible,
 .row-open:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
