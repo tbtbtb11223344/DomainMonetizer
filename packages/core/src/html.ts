@@ -22,6 +22,13 @@ function guideBrand(content: DomainContent): string {
   return `${place} ${vertical} Guide`;
 }
 
+function sentenceVertical(vertical: string): string {
+  return vertical
+    .split(/\s+/)
+    .map((word) => word.length > 1 && word === word.toUpperCase() ? word : word.toLowerCase())
+    .join(" ");
+}
+
 function verticalSlug(vertical: string): string {
   return vertical.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
@@ -64,6 +71,7 @@ export function compileHomeServicesHtml(input: {
   const e = escapeHtml;
   const place = locationLabel(content);
   const brand = guideBrand(content);
+  const vertical = sentenceVertical(content.vertical);
   const credit = photoCredit(content.image.assetPath);
   const responsive = responsiveImage(content.image.assetPath);
   const serviceItems = content.services
@@ -100,11 +108,11 @@ export function compileHomeServicesHtml(input: {
 <header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(brand)} home"><span class="brand-mark" aria-hidden="true"></span><span>${e(brand)}</span></a>${headerAction}</div></header>
 <main>
 <section class="hero"><div class="hero-media"><img src="${e(content.image.assetPath)}"${responsive ? ` srcset="${e(responsive.compactPath)} 960w, ${e(content.image.assetPath)} ${responsive.sourceWidth}w" sizes="100vw"` : ""} alt="${e(content.image.alt)}" width="${responsive?.sourceWidth ?? 1200}" height="${responsive?.sourceHeight ?? 900}" fetchpriority="high" decoding="async"><div class="hero-shade"></div></div><div class="hero-inner"><div class="hero-copy"><p class="eyebrow">${e(content.hero.eyebrow)}</p><h1>${e(content.hero.title)}</h1><p class="lede">${e(content.hero.summary)}</p>${action}<p class="hero-disclosure">Independent referral guide <span aria-hidden="true">&middot;</span> Provider terms and availability vary</p></div></div><div class="hero-caption"><span>${e(content.vertical)} guidance for ${locationText}</span>${creditHtml}</div></section>
-<section class="trust-band" aria-label="Why use this guide"><div class="trust-inner"><div><span class="trust-number">01</span><p><strong>Focused on ${locationText}</strong><span>Built around nearby ${e(content.vertical.toLowerCase())} needs.</span></p></div><div><span class="trust-number">02</span><p><strong>Know before you book</strong><span>Useful questions, clearer estimates, fewer surprises.</span></p></div><div><span class="trust-number">03</span><p><strong>Clear, practical guidance</strong><span>Choose your next step with more confidence.</span></p></div></div></section>
+<section class="trust-band" aria-label="Why use this guide"><div class="trust-inner"><div><span class="trust-number">01</span><p><strong>Focused on ${locationText}</strong><span>Built around nearby ${e(vertical)} needs.</span></p></div><div><span class="trust-number">02</span><p><strong>Know before you book</strong><span>Useful questions, clearer estimates, fewer surprises.</span></p></div><div><span class="trust-number">03</span><p><strong>Clear, practical guidance</strong><span>Choose your next step with more confidence.</span></p></div></div></section>
 <section class="services section" data-reveal><div class="section-intro"><p class="eyebrow">A smarter first call</p><h2>${e(content.servicesHeading)}</h2></div><ol>${serviceItems}</ol></section>
 <section class="guide" data-reveal><div class="guide-inner"><div class="guide-heading"><p class="eyebrow">Your 60-second prep</p><h2>${e(content.guide.heading)}</h2></div><ol class="prep-list">${guide}</ol></div></section>
 <section class="faq section" data-reveal><div class="section-intro"><p class="eyebrow">Straight answers</p><h2>${e(content.faqHeading)}</h2></div><div class="faq-list">${faqs}</div></section>
-<section class="final" data-reveal><div class="final-inner"><div><p class="eyebrow">${offerEnabled ? "Your next step" : "Coverage update"}</p><h2>${offerEnabled ? `Ready to explore ${e(content.vertical.toLowerCase())} options in ${locationText}?` : `We're building a better way to find ${e(content.vertical.toLowerCase())} help in ${locationText}.`}</h2></div>${action}</div></section>
+<section class="final" data-reveal><div class="final-inner"><div><p class="eyebrow">${offerEnabled ? "Your next step" : "Coverage update"}</p><h2>${offerEnabled ? `Ready to explore ${e(vertical)} options in ${locationText}?` : `We're building a better way to find ${e(vertical)} help in ${locationText}.`}</h2></div>${action}</div></section>
 </main>
 <footer><div class="footer-brand"><span class="brand-mark" aria-hidden="true"></span><strong>${e(brand)}</strong></div><p>${e(content.disclosure)}</p><p class="copyright">&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
 ${mobileAction}<script src="/__dm/site-v2.js" defer></script></body></html>`;

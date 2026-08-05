@@ -57,4 +57,16 @@ describe("core contracts", () => {
     expect(html).not.toContain('class="mast-cta"');
     expect(html).not.toContain('href="/go/primary"');
   });
+
+  it("preserves acronyms when a vertical is used in sentence copy", () => {
+    const html = compileHomeServicesHtml({
+      content: { ...content, vertical: "HVAC" },
+      hostname: "example.com",
+      releaseId: "rel_hvac",
+      offerEnabled: false,
+    });
+    expect(html).toContain("nearby HVAC needs");
+    expect(html).toContain("find HVAC help");
+    expect(html).not.toContain("nearby hvac needs");
+  });
 });
