@@ -1,4 +1,4 @@
-import { compileHomeServicesHtml, contentSchema, hmacSha256Hex, releaseSnapshotSchema } from "@domain-monetizer/core";
+import { compileHomeServicesHtml, contentSchema, hmacSha256Hex, releaseSnapshotSchema, sha256Hex } from "@domain-monetizer/core";
 import { describe, expect, it } from "vitest";
 import worker from "./index";
 
@@ -25,7 +25,7 @@ const content = contentSchema.parse({
   image: { assetPath: "/__dm/assets/home-services-hero.webp", alt: "A technician checking a home appliance" },
 });
 
-function environment(overrides: Record<string, string> = {}, state: "live" | "paused" = "live") {
+function environment(overrides: Record<string, string> = {}, state: "live" | "paused" = "live", envOverrides: Record<string, string> = {}) {
   const snapshot = releaseSnapshotSchema.parse({
     schemaVersion: 1,
     releaseId: "rel_test",
@@ -53,6 +53,7 @@ function environment(overrides: Record<string, string> = {}, state: "live" | "pa
       ENVIRONMENT: "test",
       CONTROL_SHARED_SECRET: "test-secret",
       VISITOR_HASH_SALT: "test-salt",
+      ...envOverrides,
     },
     events,
   };
@@ -108,6 +109,46 @@ describe("site edge", () => {
     const engagementPoint = events[1] as { blobs: string[] };
     expect(engagementPoint.blobs[3]).toBe("human");
     expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
+  });
+
+  it("does not issue a session or record visitor events for a secret-hashed excluded source IP", async () => {
+    const excludedIp = "203.0.113.19";
+    const salt = "a".repeat(64);
+    const excludedHash = await sha256Hex(`${salt}:${excludedIp}`);
+    const { env, events } = environment({}, "live", { TELEMETRY_EXCLUSION_SECRET: `v1:${salt}:${excludedHash}` });
+    const browserHeaders = {
+      Accept: "text/html,application/xhtml+xml",
+      "CF-Connecting-IP": excludedIp,
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+    };
+
+    const view = await worker.fetch(new Request("https://pilot-example.com/", { headers: browserHeaders }), env as never);
+    expect(view.status).toBe(200);
+    expect(view.headers.get("X-DM-Telemetry")).toBe("excluded");
+    expect(view.headers.get("Set-Cookie")).toBeNull();
+
+    const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
+      method: "POST",
+      headers: {
+        "CF-Connecting-IP": excludedIp,
+        "Content-Type": "application/json",
+        Cookie: `dm_vid=${"b".repeat(32)}`,
+        Origin: "https://pilot-example.com",
+        "User-Agent": browserHeaders["User-Agent"],
+      },
+      body: JSON.stringify({ releaseId: "rel_test" }),
+    }), env as never);
+    expect(engagement.status).toBe(204);
+    expect(engagement.headers.get("X-DM-Telemetry")).toBe("excluded");
+    expect(events).toHaveLength(0);
+
+    const otherVisitor = await worker.fetch(new Request("https://pilot-example.com/", {
+      headers: { ...browserHeaders, "CF-Connecting-IP": "203.0.113.20" },
+    }), env as never);
+    expect(otherVisitor.headers.get("X-DM-Telemetry")).toBeNull();
+    expect(events).toHaveLength(1);
   });
 
   it("ignores engagement without the issued session and rejects cross-origin beacons", async () => {

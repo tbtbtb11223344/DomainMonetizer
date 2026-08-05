@@ -22,6 +22,7 @@ interface Env {
   ENVIRONMENT: string;
   CONTROL_SHARED_SECRET: string;
   VISITOR_HASH_SALT: string;
+  TELEMETRY_EXCLUSION_SECRET?: string;
 }
 
 interface CfProperties {
@@ -45,6 +46,11 @@ interface VisitorClassification {
   botScore: number | null;
 }
 
+interface TelemetryExclusion {
+  salt: string;
+  hashes: string[];
+}
+
 const securityHeaders: Record<string, string> = {
   "Content-Security-Policy": "default-src 'none'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'none'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; upgrade-insecure-requests",
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -64,6 +70,20 @@ function withHeaders(response: Response, extra: Record<string, string> = {}): Re
 function errorResponse(status: number, title: string): Response {
   const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${title}</title><link rel="stylesheet" href="/__dm/site-v2.css"></head><body class="system-page"><main><h1>${title}</h1><p>This site is not currently available.</p></main></body></html>`;
   return withHeaders(new Response(body, { status, headers: { "Content-Type": "text/html; charset=UTF-8", "Cache-Control": "no-store" } }));
+}
+
+function telemetryExclusion(secret: string | undefined): TelemetryExclusion | null {
+  if (!secret) return null;
+  const match = secret.match(/^v1:([a-f0-9]{64}):([a-f0-9]{64}(?:,[a-f0-9]{64})*)$/);
+  return match ? { salt: match[1]!, hashes: match[2]!.split(",") } : null;
+}
+
+async function isTelemetryExcluded(request: Request, env: Env): Promise<boolean> {
+  const exclusion = telemetryExclusion(env.TELEMETRY_EXCLUSION_SECRET);
+  const sourceIp = request.headers.get("cf-connecting-ip")?.trim().toLowerCase();
+  if (!exclusion || !sourceIp) return false;
+  const sourceHash = await sha256Hex(`${exclusion.salt}:${sourceIp}`);
+  return exclusion.hashes.some((expected) => timingSafeEqualString(sourceHash, expected));
 }
 
 function classifyVisitor(request: Request, interaction = false): VisitorClassification {
@@ -221,6 +241,9 @@ async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env
   if (request.method !== "POST") return new Response(null, { status: 405, headers: { Allow: "POST" } });
   if ((request.headers.get("content-type") ?? "").split(";", 1)[0] !== "application/json") return new Response(null, { status: 415 });
   if (request.headers.get("origin") !== `https://${snapshot.hostname}`) return withHeaders(new Response(null, { status: 403 }));
+  if (await isTelemetryExcluded(request, env)) {
+    return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store", "X-DM-Telemetry": "excluded" } }));
+  }
   const hashedVisitor = await visitorHash(request, env);
   if (!hashedVisitor) return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
   const body: { releaseId?: string } = await request.json<{ releaseId?: string }>().catch(() => ({}));
@@ -260,7 +283,9 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
     return errorResponse(503, "Offer temporarily unavailable");
   }
   if (destination.protocol !== "https:") return errorResponse(503, "Offer temporarily unavailable");
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", classification, hashedVisitor));
+  if (!(await isTelemetryExcluded(request, env))) {
+    env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", classification, hashedVisitor));
+  }
   return withHeaders(Response.redirect(destination, 302), { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
 }
 
@@ -327,7 +352,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     "Vary": "Accept-Encoding",
     "X-Robots-Tag": "noindex, nofollow",
   });
-  if (request.method === "GET") {
+  const telemetryExcluded = await isTelemetryExcluded(request, env);
+  if (telemetryExcluded) headers.set("X-DM-Telemetry", "excluded");
+  if (request.method === "GET" && !telemetryExcluded) {
     const visitor = await pageVisitor(request, env);
     env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classifyVisitor(request), visitor.hash));
     if (visitor.cookie) headers.append("Set-Cookie", `dm_vid=${visitor.cookie}; Max-Age=1800; Path=/; Secure; HttpOnly; SameSite=Lax`);

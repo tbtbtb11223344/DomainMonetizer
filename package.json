@@ -15,6 +15,7 @@
     "audit:cloudflare-costs": "node ops/audit_cloudflare_costs.mjs",
     "audit:pilot": "node ops/audit_pilot_state.mjs",
     "audit:sources": "node ops/audit_pilot_sources.mjs",
+    "exclude:operator-ip": "node ops/configure_telemetry_exclusion.mjs",
     "sync:cloudflare-zones": "node ops/sync_cloudflare_zone_metadata.mjs",
     "runner:codex": "node ops/run_codex_jobs.mjs --once",
     "test": "vitest run",
