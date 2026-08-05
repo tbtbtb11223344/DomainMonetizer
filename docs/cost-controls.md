@@ -2,6 +2,8 @@
 
 DomainMonetizer stays on Cloudflare's free products until clean natural-traffic evidence justifies scale. A paid Cloudflare plan, paid add-on, external VPS, queue, or hosted AI service requires an explicit cost review and user authorization.
 
+D1 Time Travel is already active at no additional charge and provides seven days of recovery history on Workers Free. It is the pilot recovery mechanism, not a long-term backup. A longer-retention D1 export destination must be selected, costed, and restore-tested before scale; the current project must not activate R2 or Workflows merely to create a premature backup pipeline.
+
 ## Verified baseline
 
 The live account was audited on `2026-08-05` Singapore time through both the Cloudflare API and the signed-in Billing page:

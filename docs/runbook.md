@@ -22,6 +22,18 @@ pnpm --filter @domain-monetizer/control dev
 
 Production resource IDs are written into the Worker configs only after Cloudflare creates them. Secrets are installed with `wrangler secret put`; they never enter Git.
 
+## Control-data recovery
+
+The production D1 database supports [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/), which is always enabled and incurs no separate restore charge. Workers Free retains only seven days of point-in-time history. Confirm that recovery is available and record the current bookmark before a schema migration or other exceptional high-risk control-plane operation:
+
+```powershell
+pnpm --dir apps/control exec wrangler d1 time-travel info domain-monetizer --config wrangler.jsonc
+```
+
+The bookmark read is safe and non-mutating. A Time Travel restore overwrites the live database and cancels in-flight queries; never run `d1 time-travel restore` from an automation or as a speculative diagnostic. A restore requires the exact intended timestamp or bookmark, a fresh current bookmark that can undo the restore, and explicit user approval at action time.
+
+Wrangler can also [export D1 to SQL](https://developers.cloudflare.com/d1/best-practices/import-export-data/). Treat every export as a sensitive database dump: write it only to an explicitly chosen encrypted location outside this repository, never print its contents, and never commit or deploy it. The seven-day built-in window is sufficient for the three-domain pilot. Before scaling, choose and test a longer-retention encrypted backup target; enabling R2, Workflows, or another hosted backup service remains a separate cost and architecture decision.
+
 Content jobs are queued from the admin and consumed on demand from an authenticated machine with Codex already signed in. Use an independent `CODEX_RUNNER_SECRET` in both the control Worker and the runner process; do not reuse the site-edge/control secret. The runner produces a schema-constrained draft that still requires preview and explicit approval:
 
 ```powershell
