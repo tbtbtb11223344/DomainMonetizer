@@ -5,6 +5,7 @@ import {
   releaseKey,
   releaseSnapshotSchema,
   sha256Hex,
+  siteMarkSvg,
   timingSafeEqualString,
   type ReleaseSnapshot,
 } from "@domain-monetizer/core";
@@ -265,6 +266,24 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
 
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/__dm/assets/site-mark.svg" && (request.method === "GET" || request.method === "HEAD")) {
+    let hostname: string;
+    try {
+      hostname = canonicalHostname(request.headers.get("host") ?? url.hostname);
+    } catch {
+      return errorResponse(400, "Invalid hostname");
+    }
+    const snapshot = await loadSnapshot(hostname, env).catch(() => null);
+    if (snapshot) {
+      return withHeaders(new Response(request.method === "HEAD" ? null : siteMarkSvg(snapshot.content), {
+        headers: {
+          "Content-Type": "image/svg+xml; charset=UTF-8",
+          "Cache-Control": "public, max-age=3600",
+          "ETag": `"site-mark-${snapshot.releaseId}"`,
+        },
+      }));
+    }
+  }
   if (url.pathname.startsWith("/__dm/")) return withHeaders(await env.ASSETS.fetch(request), { "Cache-Control": "public, max-age=86400, immutable" });
   if (url.pathname === "/healthz") return withHeaders(Response.json({ ok: true, service: "site-edge" }), { "Cache-Control": "no-store" });
   if (request.method !== "GET" && request.method !== "HEAD" && !(request.method === "POST" && url.pathname === "/events/engaged")) return new Response(null, { status: 405 });

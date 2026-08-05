@@ -60,26 +60,20 @@ h1, h2, h3, p { text-wrap: pretty; }
   text-decoration: none;
 }
 .brand-mark {
-  position: relative;
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
   border: 1.5px solid currentColor;
   border-radius: 50%;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-indent: .08em;
+  transition: color .25s ease, border-color .25s ease;
 }
-.brand-mark::before,
-.brand-mark::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 11px;
-  height: 1.5px;
-  background: currentColor;
-  content: "";
-  transform-origin: left center;
-}
-.brand-mark::before { transform: translate(-5px, 2px) rotate(-38deg); }
-.brand-mark::after { transform: translate(3px, -2px) rotate(-48deg); }
 .mast-status {
   display: inline-flex;
   align-items: center;
@@ -371,7 +365,7 @@ footer {
   line-height: 1.65;
 }
 .footer-brand { display: flex; align-items: center; gap: 12px; color: #fff; font-size: 13px; }
-.footer-brand .brand-mark { width: 24px; height: 24px; }
+.footer-brand .brand-mark { width: 24px; height: 24px; font-size: 8px; }
 footer p { max-width: 760px; margin: 0; }
 .copyright { white-space: nowrap; }
 .mobile-action { display: none; }

@@ -22,6 +22,17 @@ function guideBrand(content: DomainContent): string {
   return `${place} ${vertical} Guide`;
 }
 
+export function guideBrandInitials(content: DomainContent): string {
+  const place = content.location.city ?? content.location.region ?? "Local";
+  const initial = (value: string) => value.match(/[a-z0-9]/i)?.[0]?.toUpperCase() ?? "";
+  return `${initial(place)}${initial(content.vertical)}` || "LG";
+}
+
+export function siteMarkSvg(content: DomainContent): string {
+  const initials = guideBrandInitials(content);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#0b202a"/><circle cx="32" cy="32" r="21" fill="none" stroke="#f6b84a" stroke-width="2"/><text x="32" y="36" fill="#fffdf8" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="800" letter-spacing="1" text-anchor="middle">${initials}</text></svg>`;
+}
+
 function sentenceVertical(vertical: string): string {
   return vertical
     .split(/\s+/)
@@ -71,6 +82,7 @@ export function compileHomeServicesHtml(input: {
   const e = escapeHtml;
   const place = locationLabel(content);
   const brand = guideBrand(content);
+  const brandInitials = guideBrandInitials(content);
   const vertical = sentenceVertical(content.vertical);
   const credit = photoCredit(content.image.assetPath);
   const responsive = responsiveImage(content.image.assetPath);
@@ -105,7 +117,7 @@ export function compileHomeServicesHtml(input: {
 <meta name="theme-color" content="#0b202a">
 <link rel="canonical" href="https://${e(hostname)}/"><link rel="icon" href="/__dm/assets/site-mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/__dm/site-v2.css">
 </head><body data-release="${e(releaseId)}" data-vertical="${e(verticalSlug(content.vertical))}" data-offer="${offerEnabled ? "enabled" : "disabled"}">
-<header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(brand)} home"><span class="brand-mark" aria-hidden="true"></span><span>${e(brand)}</span></a>${headerAction}</div></header>
+<header class="mast"><div class="mast-inner"><a href="/" class="brand" aria-label="${e(brand)} home"><span class="brand-mark" aria-hidden="true">${e(brandInitials)}</span><span>${e(brand)}</span></a>${headerAction}</div></header>
 <main>
 <section class="hero"><div class="hero-media"><img src="${e(content.image.assetPath)}"${responsive ? ` srcset="${e(responsive.compactPath)} 960w, ${e(content.image.assetPath)} ${responsive.sourceWidth}w" sizes="100vw"` : ""} alt="${e(content.image.alt)}" width="${responsive?.sourceWidth ?? 1200}" height="${responsive?.sourceHeight ?? 900}" fetchpriority="high" decoding="async"><div class="hero-shade"></div></div><div class="hero-inner"><div class="hero-copy"><p class="eyebrow">${e(content.hero.eyebrow)}</p><h1>${e(content.hero.title)}</h1><p class="lede">${e(content.hero.summary)}</p>${action}<p class="hero-disclosure">Independent referral guide <span aria-hidden="true">&middot;</span> Provider terms and availability vary</p></div></div><div class="hero-caption"><span>${e(content.vertical)} guidance for ${locationText}</span>${creditHtml}</div></section>
 <section class="trust-band" aria-label="Why use this guide"><div class="trust-inner"><div><span class="trust-number">01</span><p><strong>Focused on ${locationText}</strong><span>Built around nearby ${e(vertical)} needs.</span></p></div><div><span class="trust-number">02</span><p><strong>Know before you book</strong><span>Useful questions, clearer estimates, fewer surprises.</span></p></div><div><span class="trust-number">03</span><p><strong>Clear, practical guidance</strong><span>Choose your next step with more confidence.</span></p></div></div></section>
@@ -114,7 +126,7 @@ export function compileHomeServicesHtml(input: {
 <section class="faq section" data-reveal><div class="section-intro"><p class="eyebrow">Straight answers</p><h2>${e(content.faqHeading)}</h2></div><div class="faq-list">${faqs}</div></section>
 <section class="final" data-reveal><div class="final-inner"><div><p class="eyebrow">${offerEnabled ? "Your next step" : "Coverage update"}</p><h2>${offerEnabled ? `Ready to explore ${e(vertical)} options in ${locationText}?` : `We're building a better way to find ${e(vertical)} help in ${locationText}.`}</h2></div>${action}</div></section>
 </main>
-<footer><div class="footer-brand"><span class="brand-mark" aria-hidden="true"></span><strong>${e(brand)}</strong></div><p>${e(content.disclosure)}</p><p class="copyright">&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
+<footer><div class="footer-brand"><span class="brand-mark" aria-hidden="true">${e(brandInitials)}</span><strong>${e(brand)}</strong></div><p>${e(content.disclosure)}</p><p class="copyright">&copy; ${new Date().getUTCFullYear()} ${e(hostname)}</p></footer>
 ${mobileAction}<script src="/__dm/site-v2.js" defer></script></body></html>`;
 }
 

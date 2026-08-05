@@ -2,6 +2,13 @@
   document.documentElement.classList.add("js");
   requestAnimationFrame(() => document.documentElement.classList.add("ready"));
 
+  document.querySelectorAll(".brand-mark").forEach((mark) => {
+    if (mark.textContent.trim()) return;
+    const brandName = mark.nextElementSibling?.textContent ?? "";
+    const initials = brandName.match(/[a-z0-9]+/gi)?.slice(0, 2).map((word) => word[0].toUpperCase()).join("");
+    if (initials) mark.textContent = initials;
+  });
+
   const mast = document.querySelector(".mast");
   const updateMast = () => mast?.classList.toggle("scrolled", window.scrollY > 24);
   updateMast();

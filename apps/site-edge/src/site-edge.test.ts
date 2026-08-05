@@ -271,6 +271,18 @@ describe("site edge", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("serves a site-specific monogram favicon without recording a visit", async () => {
+    const { env, events } = environment();
+    const response = await worker.fetch(new Request("https://pilot-example.com/__dm/assets/site-mark.svg"), env as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/svg+xml; charset=UTF-8");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=3600");
+    expect(response.headers.get("ETag")).toBe('"site-mark-rel_test"');
+    expect(await response.text()).toContain(">TA</text>");
+    expect(events).toHaveLength(0);
+  });
+
   it("classifies automation user agents as bots", async () => {
     const { env, events } = environment();
     await worker.fetch(new Request("https://pilot-example.com/", { headers: { "User-Agent": "Mozilla/5.0 compatible; research-bot/1.0" } }), env as never);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalHostname, compileHomeServicesHtml, contentSchema, escapeHtml } from ".";
+import { canonicalHostname, compileHomeServicesHtml, contentSchema, escapeHtml, guideBrandInitials, siteMarkSvg } from ".";
 
 const content = contentSchema.parse({
   schemaVersion: 1,
@@ -38,6 +38,7 @@ describe("core contracts", () => {
     const html = compileHomeServicesHtml({ content, hostname: "example.com", releaseId: "rel_1", offerEnabled: true });
     expect(html).toContain("independent referral website");
     expect(html).toContain("Tulsa Appliance Repair Guide");
+    expect(html).toContain('<span class="brand-mark" aria-hidden="true">TA</span>');
     expect(html).not.toContain("example.com home");
     expect(html).toContain('data-offer="enabled"');
     expect(html).toContain('class="mobile-action"');
@@ -47,6 +48,12 @@ describe("core contracts", () => {
     expect(html).toContain('srcset="/__dm/assets/home-services-hero-960.webp 960w, /__dm/assets/home-services-hero.webp 1122w"');
     expect(html).toContain('src="/__dm/site-v2.js"');
     expect(html).not.toContain("<script>");
+  });
+
+  it("derives a neutral site-specific monogram for the guide and favicon", () => {
+    expect(guideBrandInitials(content)).toBe("TA");
+    expect(siteMarkSvg(content)).toContain(">TA</text>");
+    expect(siteMarkSvg(content)).not.toContain("<path");
   });
 
   it("renders an honest non-interactive status when matching is disabled", () => {
