@@ -11,7 +11,7 @@ This cohort is the next build set after the original three-domain pilot. The sou
 1. Apply `migrations/0013_expansion_cohorts.sql` to the control D1 database and deploy the control Worker. Keep the site Worker deployment on the existing pilot routes until the new zones exist.
 2. Run `node ops/audit_expansion_state.mjs` against the authenticated control URL. This checks source type/status, labels, cohort membership, AI categories, local evidence, and traffic-profile completeness.
 3. Run `node ops/seed_expansion.mjs` to import the ten domains and approved manual content as `ready` drafts. The script does not publish by default.
-4. Review the ten previews, confirm the independent-guide disclosure and disabled provider state. Create/read back the ten Cloudflare zones and delegate the exact registrar nameservers; only then add the routes and deploy the site Worker.
+4. Review the ten previews, confirm the independent-guide disclosure and disabled provider state. Create/read back the ten Cloudflare zones and delegate the exact registrar nameservers; run `node ops/sync_expansion_cloudflare_zones.mjs` for the control-plane readback, then add the routes and deploy the site Worker.
 5. Run `node ops/seed_expansion.mjs --publish --activate-cohort` at the launch boundary. Activation starts telemetry and exact-session measurement on the next UTC day, avoiding a partial-day baseline.
 6. Use the admin cohort selector to review `expansion-01` independently from the original pilot. Keep all offers, routing policies, clicks, conversions, and postbacks at zero during the observation window.
 
