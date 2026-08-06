@@ -76,7 +76,8 @@ function App() {
         const message = metricsResult.reason instanceof Error ? metricsResult.reason.message : "Cohort metrics are unavailable";
         setError(`Portfolio loaded, but cohort metrics could not be loaded: ${message}`);
       }
-      if (result[0]) setSelected((currentSelection) => currentSelection ?? result[0].hostname);
+      const firstDomain = result.at(0);
+      if (firstDomain) setSelected((currentSelection) => currentSelection ?? firstDomain.hostname);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load domains");
     } finally {

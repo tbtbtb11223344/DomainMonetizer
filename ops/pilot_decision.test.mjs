@@ -113,4 +113,12 @@ describe("current-day canary reconciliation", () => {
   it("does not require current-day Analytics reads before the first grace deadline", () => {
     expect(currentDayCanaryIssues({ schedule: { requiredByNowPerDomain: 0, domains: [] }, rows: null })).toEqual([]);
   });
+
+  it("can scope reconciliation to a single cohort", () => {
+    expect(currentDayCanaryIssues({
+      schedule,
+      allowedDomainIds: new Set(["dom_1"]),
+      rows: [{ domain_id: "dom_1", distinct_canaries: 1, max_sample_interval: 1 }],
+    })).toEqual([]);
+  });
 });

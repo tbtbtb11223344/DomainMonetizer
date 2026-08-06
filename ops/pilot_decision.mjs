@@ -82,12 +82,14 @@ export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
   return issues;
 }
 
-export function currentDayCanaryIssues({ schedule, rows }) {
+export function currentDayCanaryIssues({ schedule, rows, allowedDomainIds }) {
   if (!schedule || Number(schedule.requiredByNowPerDomain ?? 0) === 0) return [];
   if (!Array.isArray(rows)) return ["Current-day Analytics Engine canaries are missing or malformed"];
 
   const issues = [];
-  const domains = Array.isArray(schedule.domains) ? schedule.domains : [];
+  const allowed = allowedDomainIds ? new Set(allowedDomainIds) : null;
+  const domains = (Array.isArray(schedule.domains) ? schedule.domains : [])
+    .filter((domain) => !allowed || allowed.has(domain.domainId));
   const expectedDomainIds = new Set(domains.map((domain) => domain.domainId));
   const rowByDomain = new Map(rows.map((row) => [row.domain_id, row]));
   for (const row of rows) {

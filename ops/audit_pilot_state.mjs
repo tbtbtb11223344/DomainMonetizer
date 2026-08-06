@@ -60,7 +60,7 @@ function nextUtcDate(date) {
   return value.toISOString().slice(0, 10);
 }
 
-async function readCurrentDayCanaries(environment, schedule) {
+async function readCurrentDayCanaries(environment, schedule, allowedDomainIds) {
   const required = Number(schedule?.requiredByNowPerDomain ?? 0);
   if (required === 0) return { checked: false, requiredByNowPerDomain: 0, rows: [] };
   const accountId = environment.CLOUDFLARE_ACCOUNT_ID;
@@ -70,7 +70,9 @@ async function readCurrentDayCanaries(environment, schedule) {
   if (!/^[a-zA-Z0-9_]+$/u.test(dataset)) throw new Error("Analytics dataset name is invalid");
   const date = schedule.date;
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Current-day schedule date is invalid");
-  const sql = `SELECT index1 AS domain_id, count(DISTINCT blob7) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1`;
+  const allowed = [...new Set(allowedDomainIds ?? [])].map((value) => String(value)).filter((value) => /^[a-zA-Z0-9_-]+$/u.test(value));
+  const domainFilter = allowed.length ? ` AND index1 IN (${allowed.map((value) => `'${value}'`).join(",")})` : "";
+  const sql = `SELECT index1 AS domain_id, count(DISTINCT blob7) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != ''${domainFilter} GROUP BY index1`;
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "text/plain" },
@@ -114,6 +116,7 @@ if (!overviewResult.response.ok || !overviewResult.body) {
 
 const domains = domainsResult.body.domains;
 const overview = overviewResult.body;
+const pilotDomainIds = new Set(domains.map((domain) => domain.domainId));
 const inventoryByHostname = new Map(domains.map((domain) => [domain.hostname, domain]));
 const healthByHostname = new Map((overview.healthChecks ?? []).map((check) => [check.hostname, check]));
 const issues = [];
@@ -204,8 +207,8 @@ if (!overview.currentDaySchedule) {
 
 let currentDayCanaries = { checked: false, requiredByNowPerDomain: 0, rows: [] };
 try {
-  currentDayCanaries = await readCurrentDayCanaries(environment, overview.currentDaySchedule);
-  issues.push(...currentDayCanaryIssues({ schedule: overview.currentDaySchedule, rows: currentDayCanaries.rows }));
+  currentDayCanaries = await readCurrentDayCanaries(environment, overview.currentDaySchedule, pilotDomainIds);
+  issues.push(...currentDayCanaryIssues({ schedule: overview.currentDaySchedule, rows: currentDayCanaries.rows, allowedDomainIds: pilotDomainIds }));
 } catch (error) {
   issues.push(error instanceof Error ? error.message : "Current-day Analytics canary query failed");
 }
