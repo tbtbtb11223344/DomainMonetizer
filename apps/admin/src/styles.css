@@ -220,7 +220,8 @@ input {
   clip: rect(0, 0, 0, 0);
 }
 
-.toolbar input {
+.toolbar input,
+.toolbar select {
   width: 430px;
   border: 0;
   border-bottom: 1px solid #bfc1bc;
@@ -230,7 +231,8 @@ input {
   font-size: 18px;
 }
 
-.toolbar input:focus {
+.toolbar input:focus,
+.toolbar select:focus {
   border-color: var(--blue);
 }
 

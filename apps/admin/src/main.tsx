@@ -1,6 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { getDomain, getMetricsOverview, listAuditEvents, listDomains, listJobs, mutate, type AuditEvent, type DomainDetail, type DomainSummary, type JobSummary, type MetricsOverview } from "./api";
+import { getDomain, getMetricsOverview, listAuditEvents, listCohorts, listDomains, listJobs, mutate, type AuditEvent, type CohortSummary, type DomainDetail, type DomainSummary, type JobSummary, type MetricsOverview } from "./api";
 import "./styles.css";
 
 type View = "portfolio" | "jobs" | "audit";
@@ -53,6 +53,8 @@ function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<DomainDetail | null>(null);
   const [overview, setOverview] = useState<MetricsOverview | null>(null);
+  const [cohorts, setCohorts] = useState<CohortSummary[]>([]);
+  const [cohort, setCohort] = useState("pilot-2026-08-05");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [auxiliaryLoading, setAuxiliaryLoading] = useState(false);
@@ -62,7 +64,7 @@ function App() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [domainResult, metricsResult] = await Promise.allSettled([listDomains(search), getMetricsOverview()]);
+      const [domainResult, metricsResult] = await Promise.allSettled([listDomains(search, cohort), getMetricsOverview(cohort)]);
       if (domainResult.status === "rejected") throw domainResult.reason;
       const result = domainResult.value;
       setDomains(result);
@@ -71,16 +73,16 @@ function App() {
         setError(null);
       } else {
         setOverview(null);
-        const message = metricsResult.reason instanceof Error ? metricsResult.reason.message : "Pilot metrics are unavailable";
-        setError(`Portfolio loaded, but pilot metrics could not be loaded: ${message}`);
+        const message = metricsResult.reason instanceof Error ? metricsResult.reason.message : "Cohort metrics are unavailable";
+        setError(`Portfolio loaded, but cohort metrics could not be loaded: ${message}`);
       }
-      if (!selected && result[0]) setSelected(result[0].hostname);
+      if (result[0]) setSelected((currentSelection) => currentSelection ?? result[0].hostname);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load domains");
     } finally {
       setLoading(false);
     }
-  }, [search, selected]);
+  }, [search, cohort]);
 
   const refreshDetail = useCallback(async () => {
     if (!selected) return setDetail(null);
@@ -92,7 +94,8 @@ function App() {
     }
   }, [selected]);
 
-  useEffect(() => { void refresh(); }, [search]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void listCohorts().then(setCohorts).catch(() => undefined); }, []);
   useEffect(() => { void refreshDetail(); }, [refreshDetail]);
   useEffect(() => {
     const syncViewFromHash = () => setView(initialView());
@@ -207,13 +210,14 @@ function App() {
 
       <section className="toolbar">
         <label><span>Filter domains</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hostname or vertical" /></label>
+        <label><span>Measurement cohort</span><select value={cohort} onChange={(event) => { setCohort(event.target.value); setSelected(null); }}><option value="">All cohorts</option>{cohorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
         <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Runtime ready {overview?.health.ready ?? "—"}</span><span><i className={`dot ${measurementOnly === null ? "ready" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
       </section>
 
       <div className="content-grid">
         <section className="table-wrap" aria-busy={loading}>
           <table>
-            <thead><tr><th>Hostname</th><th>Vertical</th><th>Pilot signal</th><th>Parking baseline</th><th>Status</th><th aria-label="Open" /></tr></thead>
+            <thead><tr><th>Hostname</th><th>Vertical</th><th>Cohort signal</th><th>Parking baseline</th><th>Status</th><th aria-label="Open" /></tr></thead>
             <tbody>{domains.map((domain) => {
               const metric = metricByDomain.get(domain.id);
               const runtimeHealth = healthByDomain.get(domain.id);

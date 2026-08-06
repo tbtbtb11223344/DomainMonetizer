@@ -37,6 +37,11 @@ export interface DomainRow {
   locale: string;
   ai_summary: string | null;
   ai_keywords_json: string;
+  ai_categories_json: string;
+  local_evidence_json: string;
+  traffic_profile_json: string;
+  cohort_key: string;
+  measurement_started_at: string | null;
   traffic_30d_visitors: number | null;
   parking_30d_revenue_usd: number | null;
   traffic_evidence_at: string | null;

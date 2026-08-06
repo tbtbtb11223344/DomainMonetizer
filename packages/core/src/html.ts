@@ -32,11 +32,23 @@ export function guideBrandInitials(content: DomainContent): string {
 
 function sitePalette(content: DomainContent): { background: string; accent: string } {
   const slug = verticalSlug(content.vertical);
-  return slug === "hvac"
-    ? { background: "#0a2b36", accent: "#74cde0" }
-    : slug === "roof-coating" || slug === "roofing"
-      ? { background: "#21332f", accent: "#e5a067" }
-      : { background: "#0b202a", accent: "#f6b84a" };
+  const palettes: Record<string, { background: string; accent: string }> = {
+    hvac: { background: "#0a2b36", accent: "#74cde0" },
+    plumbing: { background: "#12333b", accent: "#8fd3c7" },
+    "plumbing-and-hvac": { background: "#12333b", accent: "#8fd3c7" },
+    "roof-coating": { background: "#21332f", accent: "#e5a067" },
+    roofing: { background: "#21332f", accent: "#e5a067" },
+    "custom-cabinetry": { background: "#33251f", accent: "#e9bb83" },
+    "windows-and-siding": { background: "#20323c", accent: "#9dd6d0" },
+    "window-replacement": { background: "#20323c", accent: "#9dd6d0" },
+    "pest-control": { background: "#263323", accent: "#c5d27d" },
+    flooring: { background: "#3a2b23", accent: "#e1b879" },
+    "tree-and-landscape-care": { background: "#1e342a", accent: "#b9d27f" },
+    "garage-doors": { background: "#202a34", accent: "#a7c4d8" },
+    "foundation-repair": { background: "#2d302e", accent: "#d1aa7b" },
+    "marble-and-stone-care": { background: "#273137", accent: "#c6d4d2" },
+  };
+  return palettes[slug] ?? { background: "#0b202a", accent: "#f6b84a" };
 }
 
 export function siteMarkSvg(content: DomainContent): string {
@@ -80,6 +92,15 @@ function responsiveImage(assetPath: string): { compactPath: string; sourceWidth:
     "/__dm/assets/home-services-hero.webp": { compactPath: "/__dm/assets/home-services-hero-960.webp", sourceWidth: 1122, sourceHeight: 1402 },
     "/__dm/assets/hvac-service.webp": { compactPath: "/__dm/assets/hvac-service-960.webp", sourceWidth: 1600, sourceHeight: 1137 },
     "/__dm/assets/roof-coating.webp": { compactPath: "/__dm/assets/roof-coating-960.webp", sourceWidth: 1400, sourceHeight: 1050 },
+    "/__dm/assets/cabinetry-guide.webp": { compactPath: "/__dm/assets/cabinetry-guide-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/windows-exterior.webp": { compactPath: "/__dm/assets/cabinetry-guide-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/pest-control.webp": { compactPath: "/__dm/assets/pest-control-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/flooring-guide.webp": { compactPath: "/__dm/assets/flooring-guide-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/tree-care.webp": { compactPath: "/__dm/assets/tree-care-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/garage-door.webp": { compactPath: "/__dm/assets/tree-care-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/foundation-repair.webp": { compactPath: "/__dm/assets/foundation-repair-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/plumbing-hvac.webp": { compactPath: "/__dm/assets/foundation-repair-960.webp", sourceWidth: 1672, sourceHeight: 941 },
+    "/__dm/assets/stone-care.webp": { compactPath: "/__dm/assets/flooring-guide-960.webp", sourceWidth: 1672, sourceHeight: 941 },
   };
   return images[assetPath] ?? null;
 }

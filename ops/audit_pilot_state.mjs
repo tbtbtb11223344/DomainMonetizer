@@ -95,13 +95,14 @@ async function readCurrentDayCanaries(environment, schedule) {
 const environment = await loadEnvironment();
 const baseUrl = (environment.CONTROL_URL || "https://admin.multibrands.net").replace(/\/$/u, "");
 const pilotSeed = JSON.parse(await readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"));
+const pilotCohort = "pilot-2026-08-05";
 const expectedHostnames = pilotSeed.domains.map((domain) => domain.hostname).sort();
 const expectedByHostname = new Map(pilotSeed.domains.map((domain) => [domain.hostname, domain]));
 const headers = accessHeaders(environment);
 
 const [domainsResult, overviewResult] = await Promise.all([
-  readJson(`${baseUrl}/api/domains?limit=500`, { headers }),
-  readJson(`${baseUrl}/api/metrics/overview`, { headers }),
+  readJson(`${baseUrl}/api/domains?limit=500&cohort=${encodeURIComponent(pilotCohort)}`, { headers }),
+  readJson(`${baseUrl}/api/metrics/overview?cohort=${encodeURIComponent(pilotCohort)}`, { headers }),
 ]);
 
 if (!domainsResult.response.ok || !Array.isArray(domainsResult.body?.domains)) {
@@ -228,6 +229,7 @@ const report = {
   auditedAt: new Date().toISOString(),
   guard: issues.length ? "FAIL" : "PASS",
   pilot: {
+    cohortKey: pilotCohort,
     expectedHostnames,
     publishedDomains: domains.filter((domain) => domain.lifecycleStatus === "published").map((domain) => domain.hostname).sort(),
     readiness,

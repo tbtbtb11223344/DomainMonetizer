@@ -36,6 +36,86 @@
     {
       "pattern": "www.phoenixroofcoating.net",
       "custom_domain": true
+    },
+    {
+      "pattern": "accentpwp.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.accentpwp.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "americraftsw.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.americraftsw.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "homespirewindows.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.homespirewindows.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "sniperpestcontrol.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.sniperpestcontrol.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "piedmontfloor.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.piedmontfloor.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "361treeandlandscape.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.361treeandlandscape.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "a-1garagedoorsportland.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.a-1garagedoorsportland.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "adamsfoundationrepair.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.adamsfoundationrepair.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "anamechanical.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.anamechanical.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "marbleshooters.net",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.marbleshooters.net",
+      "custom_domain": true
     }
   ],
   "assets": {

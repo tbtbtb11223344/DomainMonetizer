@@ -19,7 +19,7 @@ import { z } from "zod";
 import { auditStatement, nextVersion, nowIso } from "./db";
 import { decideEvidence } from "./evidence";
 import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeCurrentDaySchedule, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow, type ScheduledTenantHealthRow } from "./health";
-import { latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
+import { completedUtcDayCount, latestCompletedUtcDate, rollupCoverageTarget, rollupDate } from "./metrics";
 import type { ContentRow, DomainRow, Env, ReleaseRow, Variables } from "./types";
 
 const HOME_SERVICES_TEMPLATE_VERSION_ID = "tpl-home-services-v2";
@@ -64,6 +64,11 @@ export function publicDomain(row: DomainRow): Record<string, unknown> {
     locale: row.locale,
     aiSummary: row.ai_summary,
     aiKeywords: jsonValue(row.ai_keywords_json, []),
+    aiCategories: jsonValue(row.ai_categories_json, []),
+    localEvidence: jsonValue(row.local_evidence_json, []),
+    trafficProfile: jsonValue(row.traffic_profile_json, {}),
+    cohortKey: row.cohort_key,
+    measurementStartedAt: row.measurement_started_at,
     traffic30dVisitors: row.traffic_30d_visitors,
     parking30dRevenueUsd: row.parking_30d_revenue_usd,
     trafficEvidenceAt: row.traffic_evidence_at,
@@ -181,29 +186,39 @@ export function mountApi(app: App): void {
   app.get("/api/domains", async (c) => {
     const search = (c.req.query("search") ?? "").trim().toLowerCase();
     const status = (c.req.query("status") ?? "").trim();
+    const cohort = (c.req.query("cohort") ?? "").trim();
     const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100), 1), 500);
     const clauses: string[] = [];
     const values: unknown[] = [];
     if (search) { clauses.push("(hostname LIKE ? OR vertical LIKE ?)"); values.push(`%${search}%`, `%${search}%`); }
     if (status) { clauses.push("lifecycle_status = ?"); values.push(status); }
+    if (cohort) { clauses.push("cohort_key = ?"); values.push(cohort); }
     const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
     const result = await c.env.DB.prepare(`SELECT * FROM domains${where} ORDER BY COALESCE(traffic_30d_visitors, 0) DESC, hostname ASC LIMIT ?`).bind(...values, limit).all<DomainRow>();
     return c.json({ domains: result.results.map(publicDomain) });
   });
 
   app.get("/api/metrics/overview", async (c) => {
-    const telemetryStartDate = c.env.TELEMETRY_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.TELEMETRY_MIN_DATE)
+    const requestedCohort = (c.req.query("cohort") ?? "").trim();
+    const cohort = requestedCohort
+      ? await c.env.DB.prepare("SELECT key,label,telemetry_start_date,exact_session_start_date,minimum_review_days,minimum_qualified_sessions,status FROM measurement_cohorts WHERE key=?").bind(requestedCohort).first<{ key: string; label: string; telemetry_start_date: string; exact_session_start_date: string; minimum_review_days: number; minimum_qualified_sessions: number; status: string }>()
+      : null;
+    if (requestedCohort && !cohort) return c.json({ error: "Cohort not found" }, 404);
+    const telemetryStartDate = cohort?.telemetry_start_date || (c.env.TELEMETRY_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.TELEMETRY_MIN_DATE)
       ? c.env.TELEMETRY_MIN_DATE
-      : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-    const exactSessionStartDate = c.env.EXACT_SESSION_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.EXACT_SESSION_MIN_DATE)
+      : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
+    const exactSessionStartDate = cohort?.exact_session_start_date || (c.env.EXACT_SESSION_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.EXACT_SESSION_MIN_DATE)
       ? c.env.EXACT_SESSION_MIN_DATE
-      : telemetryStartDate;
-    const minimumReviewDays = 14;
+      : telemetryStartDate);
+    const minimumReviewDays = Number(cohort?.minimum_review_days ?? 14);
+    const minimumQualifiedSessions = Number(cohort?.minimum_qualified_sessions ?? 10);
     const coverageNow = new Date();
+    const domainWhere = requestedCohort ? " WHERE d.cohort_key=?" : "";
+    const domainBinds = requestedCohort ? [exactSessionStartDate, exactSessionStartDate, telemetryStartDate, requestedCohort] : [exactSessionStartDate, exactSessionStartDate, telemetryStartDate];
     const [domains, latestRun, latestHealth, monetizationState] = await Promise.all([
       c.env.DB.prepare(
-        "SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=? GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id ORDER BY d.hostname",
-      ).bind(exactSessionStartDate, exactSessionStartDate, telemetryStartDate).all<OverviewDomainRow>(),
+        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
+      ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
       c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks").first<MonetizationStateRow>(),
@@ -252,12 +267,18 @@ export function mountApi(app: App): void {
       postbacks: Number(monetizationState?.postbacks ?? 0),
     };
     const measurementOnly = Object.values(monetization).every((value) => value === 0);
+    const expectedScheduledChecksByDomain = new Map(domains.results.map((domain) => {
+      const startDate = domain.measurement_started_at?.slice(0, 10) || telemetryStartDate;
+      const effectiveStart = startDate > telemetryStartDate ? startDate : telemetryStartDate;
+      const days = effectiveStart <= latestCompletedDate ? completedUtcDayCount(effectiveStart, coverageNow) : 0;
+      return [domain.domain_id, days * SCHEDULED_HEALTH_CHECKS_PER_DAY] as const;
+    }));
     const { health, healthChecks, allTenantsReady, allTenantsReliable } = summarizeTenantHealth(
       domains.results,
       latestHealth.results,
       coverageNow,
       scheduledHealth.results,
-      expectedDays * SCHEDULED_HEALTH_CHECKS_PER_DAY,
+      expectedScheduledChecksByDomain,
     );
     const currentDaySchedule = summarizeCurrentDaySchedule(domains.results, currentDayScheduledHealth.results, coverageNow, telemetryStartDate);
     const decision = decideEvidence({
@@ -271,11 +292,13 @@ export function mountApi(app: App): void {
       sessionSamplingDetected,
       measurementOnly,
       qualifiedSessions: totals.uniqueVisitors,
-      minimumQualifiedSessions: 10,
+      minimumQualifiedSessions,
     });
     return c.json({
       telemetryStartDate,
       exactSessionStartDate,
+      cohortKey: cohort?.key ?? null,
+      cohortLabel: cohort?.label ?? null,
       latestCompletedDate,
       rollupThrough: through,
       observedFullDays,
@@ -341,14 +364,36 @@ export function mountApi(app: App): void {
     for (const domain of body.data.domains) {
       const id = randomId("dom");
       statements.push(
-        c.env.DB.prepare("INSERT INTO domains (id, hostname, lifecycle_status, registrar, source_type, source_status, source_labels_json, vertical, country, ai_summary, ai_keywords_json, traffic_30d_visitors, parking_30d_revenue_usd, traffic_evidence_at, cloudflare_zone_id, assigned_nameservers_json, nameservers_verified_at, created_at, updated_at) VALUES (?, ?, 'draft', ?, 'parking', 'available', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hostname) DO UPDATE SET registrar=excluded.registrar, source_type=excluded.source_type, source_status=excluded.source_status, source_labels_json=excluded.source_labels_json, vertical=excluded.vertical, country=excluded.country, ai_summary=excluded.ai_summary, ai_keywords_json=excluded.ai_keywords_json, traffic_30d_visitors=excluded.traffic_30d_visitors, parking_30d_revenue_usd=excluded.parking_30d_revenue_usd, traffic_evidence_at=excluded.traffic_evidence_at, cloudflare_zone_id=COALESCE(excluded.cloudflare_zone_id, domains.cloudflare_zone_id), assigned_nameservers_json=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.assigned_nameservers_json ELSE excluded.assigned_nameservers_json END, nameservers_verified_at=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.nameservers_verified_at ELSE excluded.nameservers_verified_at END, updated_at=excluded.updated_at")
-          .bind(id, domain.hostname, domain.registrar ?? null, JSON.stringify(domain.sourceLabels), domain.vertical ?? null, domain.country ?? null, domain.aiSummary ?? null, JSON.stringify(domain.aiKeywords), domain.traffic30dVisitors ?? null, domain.parking30dRevenueUsd ?? null, domain.trafficEvidenceAt ?? null, domain.cloudflareZoneId ?? null, JSON.stringify(domain.assignedNameservers ?? []), domain.cloudflareZoneId ? timestamp : null, timestamp, timestamp),
+        c.env.DB.prepare("INSERT INTO domains (id, hostname, lifecycle_status, registrar, source_type, source_status, source_labels_json, vertical, country, ai_summary, ai_keywords_json, ai_categories_json, local_evidence_json, traffic_profile_json, cohort_key, traffic_30d_visitors, parking_30d_revenue_usd, traffic_evidence_at, cloudflare_zone_id, assigned_nameservers_json, nameservers_verified_at, created_at, updated_at) VALUES (?, ?, 'draft', ?, 'parking', 'available', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hostname) DO UPDATE SET registrar=excluded.registrar, source_type=excluded.source_type, source_status=excluded.source_status, source_labels_json=excluded.source_labels_json, vertical=excluded.vertical, country=excluded.country, ai_summary=excluded.ai_summary, ai_keywords_json=excluded.ai_keywords_json, ai_categories_json=excluded.ai_categories_json, local_evidence_json=excluded.local_evidence_json, traffic_profile_json=excluded.traffic_profile_json, cohort_key=excluded.cohort_key, traffic_30d_visitors=excluded.traffic_30d_visitors, parking_30d_revenue_usd=excluded.parking_30d_revenue_usd, traffic_evidence_at=excluded.traffic_evidence_at, cloudflare_zone_id=COALESCE(excluded.cloudflare_zone_id, domains.cloudflare_zone_id), assigned_nameservers_json=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.assigned_nameservers_json ELSE excluded.assigned_nameservers_json END, nameservers_verified_at=CASE WHEN excluded.cloudflare_zone_id IS NULL THEN domains.nameservers_verified_at ELSE excluded.nameservers_verified_at END, updated_at=excluded.updated_at")
+          .bind(id, domain.hostname, domain.registrar ?? null, JSON.stringify(domain.sourceLabels), domain.vertical ?? null, domain.country ?? null, domain.aiSummary ?? null, JSON.stringify(domain.aiKeywords), JSON.stringify(domain.aiCategories), JSON.stringify(domain.localEvidence), JSON.stringify(domain.trafficProfile ?? {}), domain.cohortKey ?? "pilot-2026-08-05", domain.traffic30dVisitors ?? null, domain.parking30dRevenueUsd ?? null, domain.trafficEvidenceAt ?? null, domain.cloudflareZoneId ?? null, JSON.stringify(domain.assignedNameservers ?? []), domain.cloudflareZoneId ? timestamp : null, timestamp, timestamp),
         auditStatement(c.env.DB, { actor, action: "domain.import", entityType: "domain", entityId: domain.hostname, requestId, after: domain }),
       );
       imported.push(domain.hostname);
     }
     await c.env.DB.batch(statements);
     return c.json({ imported }, 201);
+  });
+
+  app.get("/api/cohorts", async (c) => {
+    const result = await c.env.DB.prepare("SELECT key,label,telemetry_start_date,exact_session_start_date,minimum_review_days,minimum_qualified_sessions,status FROM measurement_cohorts ORDER BY created_at").all();
+    return c.json({ cohorts: result.results });
+  });
+
+  app.post("/api/cohorts/:key/activate", async (c) => {
+    const key = c.req.param("key").trim();
+    const cohort = await c.env.DB.prepare("SELECT key,status FROM measurement_cohorts WHERE key=?").bind(key).first<{ key: string; status: string }>();
+    if (!cohort) return c.json({ error: "Cohort not found" }, 404);
+    if (cohort.status !== "planned") return c.json({ error: "Only planned cohorts can be activated" }, 409);
+    const start = new Date();
+    start.setUTCDate(start.getUTCDate() + 1);
+    const startDate = start.toISOString().slice(0, 10);
+    const timestamp = nowIso();
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE measurement_cohorts SET telemetry_start_date=?, exact_session_start_date=?, status='active', updated_at=? WHERE key=?").bind(startDate, startDate, timestamp, key),
+      c.env.DB.prepare("UPDATE domains SET measurement_started_at=?, updated_at=? WHERE cohort_key=?").bind(`${startDate}T00:00:00.000Z`, timestamp, key),
+      auditStatement(c.env.DB, { actor: c.get("actor"), action: "cohort.activate", entityType: "cohort", entityId: key, requestId: c.get("requestId"), before: cohort, after: { key, status: "active", telemetryStartDate: startDate, exactSessionStartDate: startDate } }),
+    ]);
+    return c.json({ key, status: "active", telemetryStartDate: startDate, exactSessionStartDate: startDate });
   });
 
   app.get("/api/domains/:hostname", async (c) => {

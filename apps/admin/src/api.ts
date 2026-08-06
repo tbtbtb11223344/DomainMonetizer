@@ -10,6 +10,11 @@ export interface DomainSummary {
   country: string | null;
   aiSummary: string | null;
   aiKeywords: string[];
+  aiCategories: string[];
+  localEvidence: Array<{ sourceRoot: string; locality: string; service: string }>;
+  trafficProfile: { coveredDays?: number; nonzeroDays?: number; medianDailyVisitors?: number; maxDayShare?: number; provider?: string };
+  cohortKey: string;
+  measurementStartedAt: string | null;
   traffic30dVisitors: number | null;
   parking30dRevenueUsd: number | null;
   trafficEvidenceAt: string | null;
@@ -18,6 +23,16 @@ export interface DomainSummary {
   nameserversVerifiedAt: string | null;
   activeReleaseId: string | null;
   updatedAt: string;
+}
+
+export interface CohortSummary {
+  key: string;
+  label: string;
+  telemetry_start_date: string;
+  exact_session_start_date: string;
+  minimum_review_days: number;
+  minimum_qualified_sessions: number;
+  status: string;
 }
 
 export interface VersionSummary {
@@ -203,8 +218,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return payload;
 }
 
-export async function listDomains(search = ""): Promise<DomainSummary[]> {
-  const result = await request<{ domains: DomainSummary[] }>(`/api/domains?limit=500&search=${encodeURIComponent(search)}`);
+export async function listDomains(search = "", cohort = ""): Promise<DomainSummary[]> {
+  const query = new URLSearchParams({ limit: "500" });
+  if (search) query.set("search", search);
+  if (cohort) query.set("cohort", cohort);
+  const result = await request<{ domains: DomainSummary[] }>(`/api/domains?${query.toString()}`);
   return result.domains;
 }
 
@@ -212,8 +230,13 @@ export async function getDomain(hostname: string): Promise<DomainDetail> {
   return request(`/api/domains/${encodeURIComponent(hostname)}`);
 }
 
-export async function getMetricsOverview(): Promise<MetricsOverview> {
-  return request("/api/metrics/overview");
+export async function getMetricsOverview(cohort = ""): Promise<MetricsOverview> {
+  return request(`/api/metrics/overview${cohort ? `?cohort=${encodeURIComponent(cohort)}` : ""}`);
+}
+
+export async function listCohorts(): Promise<CohortSummary[]> {
+  const result = await request<{ cohorts: CohortSummary[] }>("/api/cohorts");
+  return result.cohorts;
 }
 
 export async function listJobs(): Promise<JobSummary[]> {

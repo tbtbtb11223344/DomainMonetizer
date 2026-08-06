@@ -57,6 +57,7 @@ export interface HealthPortfolioDomain {
   hostname: string;
   lifecycle_status: string;
   active_release_id: string | null;
+  measurement_started_at?: string | null;
 }
 
 export interface LatestTenantHealthRow {
@@ -176,7 +177,7 @@ export function summarizeTenantHealth(
   latestHealth: LatestTenantHealthRow[],
   now = new Date(),
   scheduledHealth: ScheduledTenantHealthRow[] = [],
-  expectedScheduledChecks = 0,
+  expectedScheduledChecks: number | Map<string, number> = 0,
 ): {
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];
@@ -194,9 +195,12 @@ export function summarizeTenantHealth(
     const scheduled = scheduledByDomain.get(domain.domain_id);
     const scheduledChecks = Number(scheduled?.scheduled_checks ?? 0);
     const readyScheduledChecks = Number(scheduled?.ready_scheduled_checks ?? 0);
-    const scheduleCoverage = expectedScheduledChecks === 0 ? 1 : Math.min(1, scheduledChecks / expectedScheduledChecks);
-    const readinessRate = scheduledChecks === 0 ? (expectedScheduledChecks === 0 ? 1 : 0) : readyScheduledChecks / scheduledChecks;
-    const reliable = expectedScheduledChecks === 0 || (scheduleCoverage >= HEALTH_RELIABILITY_THRESHOLD && readinessRate >= HEALTH_RELIABILITY_THRESHOLD);
+    const domainExpectedChecks = typeof expectedScheduledChecks === "number"
+      ? expectedScheduledChecks
+      : expectedScheduledChecks.get(domain.domain_id) ?? 0;
+    const scheduleCoverage = domainExpectedChecks === 0 ? 1 : Math.min(1, scheduledChecks / domainExpectedChecks);
+    const readinessRate = scheduledChecks === 0 ? (domainExpectedChecks === 0 ? 1 : 0) : readyScheduledChecks / scheduledChecks;
+    const reliable = domainExpectedChecks === 0 || (scheduleCoverage >= HEALTH_RELIABILITY_THRESHOLD && readinessRate >= HEALTH_RELIABILITY_THRESHOLD);
     return {
       domainId: domain.domain_id,
       hostname: domain.hostname,
@@ -210,7 +214,7 @@ export function summarizeTenantHealth(
       fresh,
       releaseMatches,
       scheduledChecks,
-      expectedScheduledChecks,
+      expectedScheduledChecks: domainExpectedChecks,
       readyScheduledChecks,
       scheduleCoverage,
       readinessRate,
@@ -225,7 +229,7 @@ export function summarizeTenantHealth(
     stale: healthChecks.filter((check) => check.checkedAt && !check.fresh).length,
     unchecked: healthChecks.filter((check) => !check.checkedAt).length,
     scheduledChecks: healthChecks.reduce((sum, check) => sum + check.scheduledChecks, 0),
-    expectedScheduledChecks: expectedScheduledChecks * publishedDomains.length,
+    expectedScheduledChecks: healthChecks.reduce((sum, check) => sum + check.expectedScheduledChecks, 0),
     readyScheduledChecks: healthChecks.reduce((sum, check) => sum + check.readyScheduledChecks, 0),
     reliabilityThreshold: HEALTH_RELIABILITY_THRESHOLD,
     lastCheckedAt: healthChecks.map((check) => check.checkedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,

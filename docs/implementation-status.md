@@ -10,7 +10,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 - Exact-session boundary: `2026-08-07 UTC`; the earlier retained day remains visible but cannot count because its tenant-indexed session query was sampled.
 - Decision window: at least 14 complete decision-grade UTC days (exact sessions plus verified canaries on the same day) and at least 10 exact qualified anonymous sessions across the pilot.
 - Runtime: two Cloudflare Workers, one D1 database, one KV namespace, and Analytics Engine; no VPS, Queue, R2, Workflow, Durable Object, or paid Cloudflare subscription.
-- Expansion authority: none. `review_scale_candidate` requests human review; it never publishes another domain.
+- Expansion authority: `expansion-01` is prepared but planned. Its ten local-service domains remain unpublished until the source, preview, DNS, and cohort-activation gates in `docs/expansion-01.md` are completed.
 
 ## Requirement ledger
 
@@ -28,6 +28,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 | Tenant health and telemetry canaries | Implemented and live | Four daily exact-release checks, signed distinct canaries, same-day grace-aware reconciliation, completed-day reconciliation | Replace the 20-domain bounded checker before domain 21 |
 | Deterministic decision handoff | Implemented | `pnpm audit:pilot` emits `continue_collecting`, `repair_pilot`, `do_not_scale`, or `review_scale_candidate` and fails closed on contract drift | Human review remains mandatory |
 | Source eligibility | Implemented for the exact pilot | `pnpm audit:sources` re-reads Domain Manager and DomainAnalyzer for parking + available + no Traffic2, the required `DomainMonetizer` nameserver-protection label, expected US/vertical classification, and risk flags | Re-run candidate selection, apply the protection label, and perform exact pre-mutation readback for every approved batch |
+| Cohort-aware expansion | Implemented for `expansion-01` | `0013_expansion_cohorts.sql`, `ops/expansion_seed.json`, `ops/audit_expansion_state.mjs`, and the admin cohort selector preserve separate measurement boundaries and source evidence | Import as ready, complete DNS/preview readback, publish the exact ten, then activate on a next-UTC-day boundary |
 | Cost containment | Implemented for the pilot | `pnpm audit:cloudflare-costs` proves zero positive-price subscriptions, exact resources/bindings/hostnames, and D1 below 50 MiB | Obtain user approval for any paid product or VPS |
 | Control-data recovery | Sufficient for pilot | D1 Time Travel bookmark readback and seven-day Free retention; destructive restore requires explicit approval | Select, cost, and restore-test encrypted longer-retention backup storage |
 | Thousands-domain routing | Designed, not activated | Current full-zone topology and documented 1,000-routed-zone Worker ceiling | Before 900 routes, canary Cloudflare for SaaS or approve deterministic Worker shards |
