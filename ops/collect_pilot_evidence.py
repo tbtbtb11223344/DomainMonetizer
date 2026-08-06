@@ -122,7 +122,6 @@ def main() -> int:
             exact_clause = f" AND LOWER(d.domain_name) IN ({','.join(['%s'] * len(exact_domains))})"
             exact_values = tuple(exact_domains)
         eligibility_sql = """
-            FROM domains d
             WHERE LOWER(TRIM(d.type))='parking'
               AND LOWER(TRIM(d.status))='available'
               AND NOT EXISTS (
@@ -131,19 +130,33 @@ def main() -> int:
                      AND LOWER(TRIM(blocked.label_key))='traffic2'
               )
         """
-        dm_cursor.execute(f"SELECT COUNT(*) AS count {eligibility_sql}")
+        dm_cursor.execute(f"SELECT COUNT(*) AS count FROM domains d {eligibility_sql}")
         source_eligibility_count = int(dm_cursor.fetchone()["count"])
         dm_cursor.execute(
             f"""
             SELECT d.domain_name, d.registrar, d.nameservers, d.nameserver_sync_state,
-                   d.parking_last_30d_visitors, d.parking_last_30d_revenue,
+                   COALESCE(parked_stats.visitors_30d, 0) AS parking_last_30d_visitors,
+                   COALESCE(parked_stats.revenue_30d, 0) AS parking_last_30d_revenue,
                    d.parking_data_start_date, d.parking_data_end_date, d.parking_data_updated_at,
                    (SELECT GROUP_CONCAT(dl.label ORDER BY dl.label SEPARATOR '|')
                       FROM domain_labels dl WHERE LOWER(dl.domain_name)=LOWER(d.domain_name)) AS labels
+              FROM domains d
+              LEFT JOIN (
+                    SELECT domain_name,
+                           SUM(CASE WHEN stat_date BETWEEN CURRENT_DATE - INTERVAL 30 DAY
+                                    AND CURRENT_DATE - INTERVAL 1 DAY
+                                    THEN COALESCE(visitors, 0) ELSE 0 END) AS visitors_30d,
+                           SUM(CASE WHEN stat_date BETWEEN CURRENT_DATE - INTERVAL 30 DAY
+                                    AND CURRENT_DATE - INTERVAL 1 DAY
+                                    THEN COALESCE(revenue, 0) ELSE 0 END) AS revenue_30d
+                      FROM parking_provider_daily_stats
+                     WHERE provider IN ('parklogic', 'giantpanda')
+                     GROUP BY domain_name
+              ) parked_stats ON parked_stats.domain_name = d.domain_name
               {eligibility_sql}
               {exact_clause}
-             ORDER BY COALESCE(d.parking_last_30d_visitors, 0) DESC,
-                      COALESCE(d.parking_last_30d_revenue, 0) DESC,
+             ORDER BY COALESCE(parked_stats.visitors_30d, 0) DESC,
+                      COALESCE(parked_stats.revenue_30d, 0) DESC,
                       d.domain_name ASC
              LIMIT %s
             """,

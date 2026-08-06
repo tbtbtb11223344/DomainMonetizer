@@ -94,6 +94,9 @@ describe("site edge", () => {
     const viewPoint = events[0] as { blobs: string[] };
     expect(viewPoint.blobs[3]).toBe("human");
     expect(viewPoint.blobs[7]).toBe("browser_navigation");
+    const firstSessionPoint = events[1] as { blobs: string[]; indexes: string[] };
+    expect(firstSessionPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test"]);
+    expect(firstSessionPoint.indexes).toEqual([viewPoint.blobs[6]]);
 
     const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
       method: "POST",
@@ -106,9 +109,12 @@ describe("site edge", () => {
       body: JSON.stringify({ releaseId: "rel_test" }),
     }), env as never);
     expect(engagement.status).toBe(204);
-    const engagementPoint = events[1] as { blobs: string[] };
+    const engagementPoint = events[2] as { blobs: string[] };
     expect(engagementPoint.blobs[3]).toBe("human");
     expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
+    const engagedSessionPoint = events[3] as { blobs: string[]; indexes: string[] };
+    expect(engagedSessionPoint.blobs[0]).toBe("qualified_session");
+    expect(engagedSessionPoint.indexes).toEqual([viewPoint.blobs[6]]);
   });
 
   it("does not issue a session or record visitor events for a secret-hashed excluded source IP", async () => {
@@ -148,7 +154,7 @@ describe("site edge", () => {
       headers: { ...browserHeaders, "CF-Connecting-IP": "203.0.113.20" },
     }), env as never);
     expect(otherVisitor.headers.get("X-DM-Telemetry")).toBeNull();
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
   });
 
   it("ignores engagement without the issued session and rejects cross-origin beacons", async () => {

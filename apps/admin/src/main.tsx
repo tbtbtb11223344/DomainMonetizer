@@ -163,17 +163,18 @@ function App() {
     ? "Ready for scale review"
     : overview?.evidenceStatus === "insufficient_signal"
       ? "More traffic needed"
-      : `${overview?.observedFullDays ?? 0}/${overview?.minimumReviewDays ?? 14} clean days`;
+      : `${overview?.decisionGradeDays ?? 0}/${overview?.minimumReviewDays ?? 14} decision-grade days`;
   const samplingLabel = !overview
     ? "Analytics exactness is loading."
     : !overview.sampling.exactQualifiedSessions
-      ? `The session query was sampled at ×${overview.sampling.uniqueSampleInterval}, so session counts are not exact.`
+      ? `Exact-session evidence is ${overview.sampling.exactDays}/${overview.sampling.requiredDays} complete days since ${overview.exactSessionStartDate}. Earlier sampled traffic remains visible but does not count toward review.`
       : overview.sampling.detected
         ? `Qualified sessions are exact; country and source breakdowns are sampling-adjusted estimates (maximum ×${overview.sampling.maxSampleInterval}).`
         : "Analytics remains unsampled, so qualified sessions and quality breakdowns are exact.";
   const measurementOnly = overview
     ? Object.values(overview.monetization).every((value) => value === 0)
     : null;
+  const observationWindowOpen = overview?.reviewBlockers.includes("observation_window") ?? true;
 
   return <div className="shell">
     <aside className="rail">
@@ -188,7 +189,7 @@ function App() {
     <main className="workspace" id={view}>
       <header className="topbar">
         <div><p className="kicker">DomainMonetizer / {view}</p><h1>{pageTitle}</h1></div>
-        {view === "portfolio" && <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}/{overview?.health.ready ?? "—"}</strong><span>live / ready</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.observedFullDays ?? 0}</strong><span>clean days</span></div></div>}
+        {view === "portfolio" && <div className="summary"><div><strong>{domains.length}</strong><span>in system</span></div><div><strong>{totals.live}/{overview?.health.ready ?? "—"}</strong><span>live / ready</span></div><div><strong>{formatNumber(overview?.totals.uniqueVisitors ?? 0)}</strong><span>qualified sessions</span></div><div><strong>{overview?.decisionGradeDays ?? 0}</strong><span>decision-grade days</span></div></div>}
         {view === "jobs" && <div className="summary"><div><strong>{jobs.length}</strong><span>recent jobs</span></div><div><strong>{jobTotals.queued}</strong><span>queued</span></div><div><strong>{jobTotals.running}</strong><span>running</span></div><div><strong>{jobTotals.failed}</strong><span>failed</span></div></div>}
         {view === "audit" && <div className="summary"><div><strong>{auditEvents.length}</strong><span>recent events</span></div><div className="summary-wide"><strong>{auditEvents[0] ? formatTimestamp(auditEvents[0].occurred_at) : "—"}</strong><span>latest mutation</span></div></div>}
       </header>
@@ -197,10 +198,10 @@ function App() {
       {view === "portfolio" && <>
       {overview?.latestRun?.status === "failed" && <div className="error" role="alert"><span>Telemetry</span>Latest daily rollup failed for {overview.latestRun.metric_date}: {overview.latestRun.error_message ?? "No diagnostic was recorded."}</div>}
       {overview && overview.latestRun?.status !== "failed" && !overview.rollupCoverageComplete && <div className="error" role="alert"><span>Telemetry</span>Coverage is incomplete: {overview.observedFullDays} of {overview.expectedFullDays} completed UTC days are stored. Automatic recovery is pending through {overview.latestCompletedDate}.</div>}
-      {overview && !overview.sampling.exactQualifiedSessions && <div className="error" role="alert"><span>Exactness</span>The qualified-session query was sampled at ×{overview.sampling.uniqueSampleInterval}. Session counts are not exact, so scale review is blocked.</div>}
-      {overview && overview.expectedFullDays > 0 && !overview.telemetry.pipelineVerified && <div className="error" role="alert"><span>Event pipeline</span>Trusted readiness canaries verified {overview.telemetry.verifiedDays} of {overview.telemetry.expectedDays} completed days. Natural-traffic conclusions are blocked until ingestion is proven.</div>}
+      {overview && !observationWindowOpen && !overview.sampling.exactQualifiedSessions && <div className="error" role="alert"><span>Exactness</span>Only {overview.sampling.exactDays} of {overview.sampling.requiredDays} exact-session days are eligible for review.</div>}
+      {overview && !observationWindowOpen && overview.expectedFullDays > 0 && !overview.telemetry.pipelineVerified && <div className="error" role="alert"><span>Event pipeline</span>Trusted readiness canaries verified {overview.telemetry.verifiedDays} completed days; {overview.minimumReviewDays} are required.</div>}
       {overview && overview.health.published > 0 && overview.health.ready < overview.health.published && <div className="error" role="alert"><span>Readiness</span>{overview.health.failing ? `${overview.health.failing} tenant check${overview.health.failing === 1 ? " is" : "s are"} failing.` : "A fresh end-to-end tenant check is pending."} Stale or unchecked tenants block scale review.</div>}
-      {overview && overview.expectedFullDays > 0 && overview.health.reliable < overview.health.published && <div className="error" role="alert"><span>Reliability</span>{overview.health.published - overview.health.reliable} tenant{overview.health.published - overview.health.reliable === 1 ? " is" : "s are"} below 95% scheduled coverage or readiness. Scale review is blocked.</div>}
+      {overview && !observationWindowOpen && overview.expectedFullDays > 0 && overview.health.reliable < overview.health.published && <div className="error" role="alert"><span>Reliability</span>{overview.health.published - overview.health.reliable} tenant{overview.health.published - overview.health.reliable === 1 ? " is" : "s are"} below 95% scheduled coverage or readiness. Scale review is blocked.</div>}
       {overview && !overview.currentDaySchedule.healthy && <div className="error" role="alert"><span>Schedule</span>Today's readiness cron is out of contract: {overview.currentDaySchedule.observedChecks} checks observed, {overview.currentDaySchedule.requiredChecks} required after grace, {overview.currentDaySchedule.expectedChecks} expected by now, and {overview.currentDaySchedule.readyChecks} ready. Reconcile the current day before trusting it.</div>}
       {overview && measurementOnly === false && <div className="error" role="alert"><span>Monetization</span>The measurement-only invariant is broken: {overview.monetization.activeOffers} active offers, {overview.monetization.activeRoutingPolicies} active policies, {overview.monetization.clicks} clicks, {overview.monetization.conversions} conversions, and {overview.monetization.postbacks} postbacks. Natural-traffic review is blocked.</div>}
 

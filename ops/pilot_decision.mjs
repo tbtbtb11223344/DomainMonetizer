@@ -44,6 +44,11 @@ const operationalBlockers = new Set([
   "qualified_session_sampling",
   "monetization_state",
 ]);
+const accumulatingQualityBlockers = new Set([
+  "tenant_reliability",
+  "telemetry_pipeline",
+  "qualified_session_sampling",
+]);
 
 export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
   const issues = [];
@@ -54,9 +59,12 @@ export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
     issues.push("Evidence blockers are missing or malformed");
     return issues;
   }
+  const observationWindowOpen = reviewBlockers.includes("observation_window");
   for (const blocker of reviewBlockers) {
     if (operationalBlockers.has(blocker)) {
-      issues.push(`Evidence gate reports ${blocker}`);
+      if (!(observationWindowOpen && accumulatingQualityBlockers.has(blocker))) {
+        issues.push(`Evidence gate reports ${blocker}`);
+      }
     } else if (!decisionOutcomeBlockers.has(blocker)) {
       issues.push(`Unknown evidence blocker: ${String(blocker)}`);
     }

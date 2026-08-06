@@ -198,6 +198,17 @@ function eventPoint(
   };
 }
 
+function qualifiedSessionPoint(snapshot: ReleaseSnapshot, visitorIdHash: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
+  return {
+    // Analytics Engine samples independently by index. A privacy-salted session
+    // hash prevents a burst on one hostname from sampling every qualified
+    // session for that tenant. The domain remains a bounded query dimension.
+    indexes: [visitorIdHash],
+    blobs: ["qualified_session", snapshot.hostname, snapshot.domainId, snapshot.releaseId],
+    doubles: [1],
+  };
+}
+
 async function writeHealthCanary(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<void> {
   if (request.method !== "GET") return;
   const signature = request.headers.get("X-DM-Health-Signature") ?? "";
@@ -248,7 +259,9 @@ async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env
   if (!hashedVisitor) return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
   const body: { releaseId?: string } = await request.json<{ releaseId?: string }>().catch(() => ({}));
   if (body.releaseId !== snapshot.releaseId) return new Response(null, { status: 409 });
-  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classifyVisitor(request, true), hashedVisitor));
+  const classification = classifyVisitor(request, true);
+  env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classification, hashedVisitor));
+  if (classification.visitorClass === "human") env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, hashedVisitor));
   return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
 }
 
@@ -356,7 +369,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if (telemetryExcluded) headers.set("X-DM-Telemetry", "excluded");
   if (request.method === "GET" && !telemetryExcluded) {
     const visitor = await pageVisitor(request, env);
-    env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classifyVisitor(request), visitor.hash));
+    const classification = classifyVisitor(request);
+    env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classification, visitor.hash));
+    if (classification.visitorClass === "human") env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, visitor.hash));
     if (visitor.cookie) headers.append("Set-Cookie", `dm_vid=${visitor.cookie}; Max-Age=1800; Path=/; Secure; HttpOnly; SameSite=Lax`);
   }
   return withHeaders(new Response(request.method === "HEAD" ? null : snapshot.html, { headers }));

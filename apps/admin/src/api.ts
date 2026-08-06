@@ -114,9 +114,11 @@ export interface DomainMetricSummary {
 
 export interface MetricsOverview {
   telemetryStartDate: string;
+  exactSessionStartDate: string;
   latestCompletedDate: string;
   rollupThrough: string | null;
   observedFullDays: number;
+  decisionGradeDays: number;
   expectedFullDays: number;
   rollupCoverageComplete: boolean;
   evidenceStatus: "collecting" | "insufficient_signal" | "review_ready";
@@ -126,7 +128,7 @@ export interface MetricsOverview {
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];
   currentDaySchedule: { date: string; expectedByNowPerDomain: number; requiredByNowPerDomain: number; expectedChecks: number; requiredChecks: number; observedChecks: number; readyChecks: number; healthy: boolean; domains: Array<{ domainId: string; hostname: string; observedChecks: number; readyChecks: number; expectedByNow: number; requiredByNow: number; onSchedule: boolean; healthy: boolean }> };
-  sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean };
+  sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean; exactDays: number; requiredDays: number };
   telemetry: { pipelineVerified: boolean; verifiedDays: number; expectedDays: number };
   monetization: { activeOffers: number; activeRoutingPolicies: number; clicks: number; conversions: number; postbacks: number };
   reviewBlockers: string[];

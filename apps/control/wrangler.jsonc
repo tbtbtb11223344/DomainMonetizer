@@ -43,6 +43,7 @@
     "CLOUDFLARE_ACCOUNT_ID": "7a79cc0f0a61c4a47d066be454804f16",
     "ANALYTICS_DATASET": "domain_monetizer_events",
     "TELEMETRY_MIN_DATE": "2026-08-05",
+    "EXACT_SESSION_MIN_DATE": "2026-08-07",
     "PREVIEW_HOSTNAME": "preview.multibrands.net"
   }
 }

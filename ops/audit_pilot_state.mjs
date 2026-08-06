@@ -117,6 +117,7 @@ const inventoryByHostname = new Map(domains.map((domain) => [domain.hostname, do
 const healthByHostname = new Map((overview.healthChecks ?? []).map((check) => [check.hostname, check]));
 const issues = [];
 
+const decisionGradeWindowComplete = !overview.reviewBlockers?.includes("observation_window");
 for (const hostname of expectedHostnames) {
   const domain = inventoryByHostname.get(hostname);
   const expected = expectedByHostname.get(hostname);
@@ -177,7 +178,7 @@ for (const hostname of expectedHostnames) {
   if (!check.fresh || check.status !== "ready" || !check.releaseMatches) {
     issues.push(`${hostname}: stored tenant health is stale, failing, or release-mismatched`);
   }
-  if (Number(check.expectedScheduledChecks ?? 0) > 0 && !check.reliable) {
+  if (decisionGradeWindowComplete && Number(check.expectedScheduledChecks ?? 0) > 0 && !check.reliable) {
     issues.push(`${hostname}: scheduled health reliability is below the required threshold`);
   }
 }
@@ -233,8 +234,10 @@ const report = {
   },
   evidence: {
     telemetryStartDate: overview.telemetryStartDate,
+    exactSessionStartDate: overview.exactSessionStartDate,
     latestCompletedDate: overview.latestCompletedDate,
     observedFullDays: overview.observedFullDays,
+    decisionGradeDays: overview.decisionGradeDays,
     expectedFullDays: overview.expectedFullDays,
     rollupCoverageComplete: overview.rollupCoverageComplete,
     evidenceStatus: overview.evidenceStatus,

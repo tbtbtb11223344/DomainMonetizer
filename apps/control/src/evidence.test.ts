@@ -3,6 +3,7 @@ import { decideEvidence, type EvidenceInputs } from "./evidence";
 
 const ready: EvidenceInputs = {
   observedFullDays: 14,
+  decisionGradeDays: 14,
   minimumReviewDays: 14,
   rollupCoverageComplete: true,
   allTenantsReady: true,
@@ -16,7 +17,7 @@ const ready: EvidenceInputs = {
 
 describe("scale-review evidence decision", () => {
   it("keeps the pilot collecting until the full observation window settles", () => {
-    expect(decideEvidence({ ...ready, observedFullDays: 13 })).toEqual({ status: "collecting", blockers: ["observation_window"] });
+    expect(decideEvidence({ ...ready, observedFullDays: 20, decisionGradeDays: 13 })).toEqual({ status: "collecting", blockers: ["observation_window"] });
   });
 
   it("blocks review when coverage, readiness, or exactness is not proven", () => {

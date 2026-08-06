@@ -14,6 +14,7 @@ export interface Env {
   ANALYTICS_READ_TOKEN?: string;
   ANALYTICS_DATASET: string;
   TELEMETRY_MIN_DATE?: string;
+  EXACT_SESSION_MIN_DATE?: string;
   PREVIEW_HOSTNAME?: string;
 }
 

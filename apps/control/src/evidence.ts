@@ -2,6 +2,7 @@ export type EvidenceStatus = "collecting" | "insufficient_signal" | "review_read
 
 export interface EvidenceInputs {
   observedFullDays: number;
+  decisionGradeDays: number;
   minimumReviewDays: number;
   rollupCoverageComplete: boolean;
   allTenantsReady: boolean;
@@ -20,7 +21,7 @@ export interface EvidenceDecision {
 
 export function decideEvidence(inputs: EvidenceInputs): EvidenceDecision {
   const blockers = [
-    ...(inputs.observedFullDays < inputs.minimumReviewDays ? ["observation_window"] : []),
+    ...(inputs.decisionGradeDays < inputs.minimumReviewDays ? ["observation_window"] : []),
     ...(!inputs.rollupCoverageComplete ? ["rollup_coverage"] : []),
     ...(!inputs.allTenantsReady ? ["tenant_readiness"] : []),
     ...(!inputs.allTenantsReliable ? ["tenant_reliability"] : []),

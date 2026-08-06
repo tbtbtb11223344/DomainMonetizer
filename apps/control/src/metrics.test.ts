@@ -49,6 +49,7 @@ function environment(db: D1Database) {
     ANALYTICS_READ_TOKEN: "analytics-token",
     ANALYTICS_DATASET: "domain_monetizer_events",
     TELEMETRY_MIN_DATE: "2026-08-05",
+    EXACT_SESSION_MIN_DATE: "2026-08-05",
     PREVIEW_HOSTNAME: "preview.multibrands.net",
   };
 }
@@ -147,6 +148,7 @@ describe("analytics rollups", () => {
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
     expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob1 = 'qualified_session'") && body.includes("count(DISTINCT index1)"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
@@ -169,6 +171,21 @@ describe("analytics rollups", () => {
     expect(batch[9]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 4, 4, 1, 1]));
     expect(batch[10]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", "service", "mobile", "search", 4, 3]));
     expect(batch[11]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", "TX", "08-11", 4, 3]));
+  });
+
+  it("retains the legacy session query before the isolated-session boundary", async () => {
+    const { db } = fakeDatabase();
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(String(init?.body));
+      return new Response(JSON.stringify({ data: [] }), { headers: { "Content-Type": "application/json" } });
+    }));
+    const env = { ...environment(db), EXACT_SESSION_MIN_DATE: "2026-08-06" };
+
+    await rollupDate(env, "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
+
+    expect(bodies.some((body) => body.includes("count(DISTINCT blob7)") && body.includes("blob1 = 'view'"))).toBe(true);
+    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session'"))).toBe(false);
   });
 
   it("clears stale traffic and country rows even when a rerun is empty", async () => {

@@ -7,7 +7,8 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 - Pilot allowlist: `mcneillsappliance.com`, `heavenlyaircondition.com`, and `phoenixroofcoating.net`.
 - Mode: natural-traffic measurement only; no active offer, routing policy, outbound affiliate action, click ledger entry, postback, or conversion.
 - Clean evidence boundary: `2026-08-05 UTC`.
-- Decision window: at least 14 complete clean UTC days and at least 10 exact qualified anonymous sessions across the pilot.
+- Exact-session boundary: `2026-08-07 UTC`; the earlier retained day remains visible but cannot count because its tenant-indexed session query was sampled.
+- Decision window: at least 14 complete decision-grade UTC days (exact sessions plus verified canaries on the same day) and at least 10 exact qualified anonymous sessions across the pilot.
 - Runtime: two Cloudflare Workers, one D1 database, one KV namespace, and Analytics Engine; no VPS, Queue, R2, Workflow, Durable Object, or paid Cloudflare subscription.
 - Expansion authority: none. `review_scale_candidate` requests human review; it never publishes another domain.
 
@@ -23,7 +24,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 | Neutral structured content | Implemented for the pilot | Shared schema, escaped deterministic renderer, neutral guide identity, approved content versions, and visually verified pilot releases | Generate only schema-constrained drafts; no raw AI HTML |
 | Automated content assistance | Implemented but intentionally operator-gated | Constrained local Codex runner, independent runner secret, JSON Schema output, draft-only submission | Batch only after candidate verticals are justified; keep preview/approval |
 | Protected administration | Implemented and live | Cloudflare Access JWT validation, exact operator email, independent service/operator secrets, same-origin mutation checks, audit log | Preserve credential isolation |
-| Natural-traffic telemetry | Implemented and collecting | Privacy-safe edge events, bot/unknown/human classification, qualified hashed sessions, country/source/intent/state/time rollups | Interpret only completed, exact, unsampled days |
+| Natural-traffic telemetry | Implemented and collecting | Privacy-safe edge events, bot/unknown/human classification, bot-burst-isolated qualified-session index, country/source/intent/state/time rollups | Interpret only completed decision-grade days |
 | Tenant health and telemetry canaries | Implemented and live | Four daily exact-release checks, signed distinct canaries, same-day grace-aware reconciliation, completed-day reconciliation | Replace the 20-domain bounded checker before domain 21 |
 | Deterministic decision handoff | Implemented | `pnpm audit:pilot` emits `continue_collecting`, `repair_pilot`, `do_not_scale`, or `review_scale_candidate` and fails closed on contract drift | Human review remains mandatory |
 | Source eligibility | Implemented for the exact pilot | `pnpm audit:sources` re-reads Domain Manager and DomainAnalyzer for parking + available + no Traffic2, the required `DomainMonetizer` nameserver-protection label, expected US/vertical classification, and risk flags | Re-run candidate selection, apply the protection label, and perform exact pre-mutation readback for every approved batch |

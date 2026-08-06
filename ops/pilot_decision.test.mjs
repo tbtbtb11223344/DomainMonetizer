@@ -55,6 +55,13 @@ describe("evidence API contract", () => {
     ]));
   });
 
+  it("treats historical quality gaps as additional collection while the decision-grade window is open", () => {
+    expect(evidenceContractIssues({
+      evidenceStatus: "collecting",
+      reviewBlockers: ["observation_window", "tenant_reliability", "telemetry_pipeline", "qualified_session_sampling"],
+    })).toEqual([]);
+  });
+
   it("rejects inconsistent status and blocker combinations", () => {
     expect(evidenceContractIssues({ evidenceStatus: "review_ready", reviewBlockers: ["qualified_sessions"] })).toContain(
       "review_ready is inconsistent with non-empty evidence blockers",
