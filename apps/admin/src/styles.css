@@ -207,6 +207,24 @@ input {
   cursor: pointer;
 }
 
+.info {
+  background: #edf5f1;
+  border-left: 3px solid #28734a;
+  margin-top: 20px;
+  padding: 16px 18px;
+  color: #244c34;
+  font-size: 16px;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.info span {
+  font: 500 12px "DM Mono";
+  text-transform: uppercase;
+  color: #267340;
+}
+
 .toolbar {
   height: 82px;
   display: flex;
@@ -707,6 +725,13 @@ td small.tenant-state.issue {
   font: 500 12px "DM Mono";
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.quality-note {
+  margin: 0 0 17px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .quality ul {
