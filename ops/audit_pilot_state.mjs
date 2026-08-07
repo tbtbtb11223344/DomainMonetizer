@@ -70,8 +70,12 @@ async function readCurrentDayCanaries(environment, schedule, allowedDomainIds) {
   if (!/^[a-zA-Z0-9_]+$/u.test(dataset)) throw new Error("Analytics dataset name is invalid");
   const date = schedule.date;
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Current-day schedule date is invalid");
-  const allowed = [...new Set(allowedDomainIds ?? [])].map((value) => String(value)).filter((value) => /^[a-zA-Z0-9_-]+$/u.test(value));
-  const domainFilter = allowed.length ? ` AND index1 IN (${allowed.map((value) => `'${value}'`).join(",")})` : "";
+  const requestedDomainIds = [...new Set(allowedDomainIds ?? [])];
+  const allowed = requestedDomainIds.filter((value) => typeof value === "string" && /^dom_[a-f0-9]+$/u.test(value));
+  if (allowed.length === 0 || allowed.length !== requestedDomainIds.length) {
+    throw new Error("Pilot canary scope is empty or contains invalid domain IDs");
+  }
+  const domainFilter = ` AND index1 IN (${allowed.map((value) => `'${value}'`).join(",")})`;
   const sql = `SELECT index1 AS domain_id, count(DISTINCT blob7) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != ''${domainFilter} GROUP BY index1`;
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
     method: "POST",
@@ -116,10 +120,13 @@ if (!overviewResult.response.ok || !overviewResult.body) {
 
 const domains = domainsResult.body.domains;
 const overview = overviewResult.body;
-const pilotDomainIds = new Set(domains.map((domain) => domain.domainId));
+const pilotDomainIds = new Set(domains.map((domain) => domain.id));
 const inventoryByHostname = new Map(domains.map((domain) => [domain.hostname, domain]));
 const healthByHostname = new Map((overview.healthChecks ?? []).map((check) => [check.hostname, check]));
 const issues = [];
+if (pilotDomainIds.size !== domains.length || [...pilotDomainIds].some((value) => typeof value !== "string" || !/^dom_[a-f0-9]+$/u.test(value))) {
+  issues.push("Pilot inventory returned missing, duplicate, or invalid domain IDs");
+}
 
 const decisionGradeWindowComplete = !overview.reviewBlockers?.includes("observation_window");
 for (const hostname of expectedHostnames) {

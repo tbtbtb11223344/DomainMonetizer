@@ -88,6 +88,9 @@ export function currentDayCanaryIssues({ schedule, rows, allowedDomainIds }) {
 
   const issues = [];
   const allowed = allowedDomainIds ? new Set(allowedDomainIds) : null;
+  if (allowed && (allowed.size === 0 || [...allowed].some((value) => typeof value !== "string" || !/^dom_[a-f0-9]+$/u.test(value)))) {
+    return ["Current-day canary scope is empty or contains invalid domain IDs"];
+  }
   const domains = (Array.isArray(schedule.domains) ? schedule.domains : [])
     .filter((domain) => !allowed || allowed.has(domain.domainId));
   const expectedDomainIds = new Set(domains.map((domain) => domain.domainId));

@@ -121,4 +121,13 @@ describe("current-day canary reconciliation", () => {
       rows: [{ domain_id: "dom_1", distinct_canaries: 1, max_sample_interval: 1 }],
     })).toEqual([]);
   });
+
+  it("fails closed when a cohort scope is empty or malformed", () => {
+    expect(currentDayCanaryIssues({ schedule, allowedDomainIds: new Set(), rows: [] })).toEqual([
+      "Current-day canary scope is empty or contains invalid domain IDs",
+    ]);
+    expect(currentDayCanaryIssues({ schedule, allowedDomainIds: new Set([undefined]), rows: [] })).toEqual([
+      "Current-day canary scope is empty or contains invalid domain IDs",
+    ]);
+  });
 });
