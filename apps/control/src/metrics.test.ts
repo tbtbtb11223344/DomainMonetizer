@@ -126,7 +126,7 @@ describe("analytics rollups", () => {
     const { db, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
     const responses = [
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "12", engaged_visits: "4", likely_human_views: "7", bot_views: "3", unknown_views: "2", human_engaged_visits: "3", us_likely_human_views: "5", clicks: "0", max_sample_interval: "1" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "6", max_sample_interval: "1" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "6", us_unique_visitors: "4", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "8", likely_human_views: "5", human_engaged_visits: "2", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "5", engaged_visits: "2", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
@@ -148,7 +148,7 @@ describe("analytics rollups", () => {
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
     expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("blob1 = 'qualified_session'") && body.includes("count(DISTINCT index1)"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob1 = 'qualified_session'") && body.includes("count(DISTINCT index1)") && body.includes("blob5 = 'US'"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
@@ -165,7 +165,7 @@ describe("analytics rollups", () => {
     const domain = batch[6]!;
     expect(domain.sql).toContain("unique_visitors");
     expect(domain.sql).toContain("max_sample_interval");
-    expect(domain.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 12, 7, 3, 2, 5, 6]));
+    expect(domain.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 12, 7, 3, 2, 5, 6, 4]));
     expect(batch[7]!.args).toEqual(expect.arrayContaining(["US", 8, 5, 2]));
     expect(batch[8]!.args).toEqual(expect.arrayContaining(["human", "browser_navigation", "US", 7922, "Comcast Cable", 5, 2]));
     expect(batch[9]!.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-05", 4, 4, 1, 1]));

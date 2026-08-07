@@ -24,6 +24,7 @@ interface UniqueRow {
   domain_id: string;
   metric_date: string;
   unique_visitors: string | number;
+  us_unique_visitors: string | number;
   max_sample_interval: string | number;
 }
 
@@ -227,8 +228,8 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
   try {
     const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged', 'click') GROUP BY index1, metric_date`;
     const uniquesSql = useExactSessionStream
-      ? `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT index1) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'qualified_session' AND blob3 != '' GROUP BY blob3, metric_date`
-      : `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`;
+      ? `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT index1) AS unique_visitors, count(DISTINCT if(blob5 = 'US', index1, NULL)) AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'qualified_session' AND blob3 != '' GROUP BY blob3, metric_date`
+      : `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, 0 AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`;
     const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, country`;
     const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
     const canariesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS observed_canaries, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1, metric_date`;
@@ -247,6 +248,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       "SELECT d.id AS domain_id,COUNT(h.id) AS expected_canaries FROM domains d LEFT JOIN tenant_health_checks h ON h.domain_id=d.id AND h.check_source='scheduled' AND h.checked_at>=? AND h.checked_at<? WHERE d.lifecycle_status='published' GROUP BY d.id",
     ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const uniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.unique_visitors)]));
+    const usUniqueByDomain = new Map(uniqueRows.map((row) => [`${row.domain_id}:${row.metric_date}`, integer(row.us_unique_visitors)]));
     const sampleByDomain = new Map<string, number>();
     for (const row of [...metricRows, ...uniqueRows, ...countryRows, ...sourceRows, ...intentRows, ...contextRows]) {
       const key = `${row.domain_id}:${row.metric_date}`;
@@ -268,7 +270,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     });
     const timestamp = nowIso();
     const statements: D1PreparedStatement[] = [
-      env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=2, updated_at=? WHERE metric_date=?")
+      env.DB.prepare("UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, us_unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=2, updated_at=? WHERE metric_date=?")
         .bind(timestamp, metricDate),
       env.DB.prepare("DELETE FROM daily_domain_country_metrics WHERE metric_date=?").bind(metricDate),
       env.DB.prepare("DELETE FROM daily_domain_source_metrics WHERE metric_date=?").bind(metricDate),
@@ -278,7 +280,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     ];
     for (const row of metricRows) {
       statements.push(
-        env.DB.prepare("INSERT INTO daily_domain_metrics (domain_id, metric_date, views, engaged_visits, likely_human_views, clicks, conversions, revenue_usd, bot_views, unknown_views, human_engaged_visits, us_likely_human_views, unique_visitors, max_sample_interval, unique_sample_interval, telemetry_version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, 2, ?) ON CONFLICT(domain_id, metric_date) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, likely_human_views=excluded.likely_human_views, clicks=excluded.clicks, bot_views=excluded.bot_views, unknown_views=excluded.unknown_views, human_engaged_visits=excluded.human_engaged_visits, us_likely_human_views=excluded.us_likely_human_views, unique_visitors=excluded.unique_visitors, max_sample_interval=excluded.max_sample_interval, unique_sample_interval=excluded.unique_sample_interval, telemetry_version=excluded.telemetry_version, updated_at=excluded.updated_at")
+        env.DB.prepare("INSERT INTO daily_domain_metrics (domain_id, metric_date, views, engaged_visits, likely_human_views, clicks, conversions, revenue_usd, bot_views, unknown_views, human_engaged_visits, us_likely_human_views, unique_visitors, us_unique_visitors, max_sample_interval, unique_sample_interval, telemetry_version, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 2, ?) ON CONFLICT(domain_id, metric_date) DO UPDATE SET views=excluded.views, engaged_visits=excluded.engaged_visits, likely_human_views=excluded.likely_human_views, clicks=excluded.clicks, bot_views=excluded.bot_views, unknown_views=excluded.unknown_views, human_engaged_visits=excluded.human_engaged_visits, us_likely_human_views=excluded.us_likely_human_views, unique_visitors=excluded.unique_visitors, us_unique_visitors=excluded.us_unique_visitors, max_sample_interval=excluded.max_sample_interval, unique_sample_interval=excluded.unique_sample_interval, telemetry_version=excluded.telemetry_version, updated_at=excluded.updated_at")
           .bind(
             row.domain_id,
             row.metric_date,
@@ -291,6 +293,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
             integer(row.human_engaged_visits),
             integer(row.us_likely_human_views),
             uniqueByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 0,
+            usUniqueByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 0,
             sampleByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 1,
             uniqueSampleByDomain.get(`${row.domain_id}:${row.metric_date}`) ?? 1,
             timestamp,

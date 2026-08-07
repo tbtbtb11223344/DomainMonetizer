@@ -56,6 +56,7 @@ export interface MetricDay {
   human_engaged_visits: number;
   us_likely_human_views: number;
   unique_visitors: number;
+  us_unique_visitors: number;
   clicks: number;
   max_sample_interval: number;
   unique_sample_interval: number;
@@ -122,6 +123,7 @@ export interface DomainMetricSummary {
   human_engaged_visits: number;
   us_likely_human_views: number;
   unique_visitors: number;
+  us_unique_visitors: number;
   clicks: number;
   max_sample_interval: number;
   unique_sample_interval: number;
@@ -138,7 +140,7 @@ export interface MetricsOverview {
   rollupCoverageComplete: boolean;
   evidenceStatus: "collecting" | "insufficient_signal" | "review_ready";
   minimumReviewDays: number;
-  totals: { likelyHumanViews: number; uniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number };
+  totals: { likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number };
   domains: DomainMetricSummary[];
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];

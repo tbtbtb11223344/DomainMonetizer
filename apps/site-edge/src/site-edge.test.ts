@@ -79,7 +79,7 @@ describe("site edge", () => {
     expect(point.blobs[7]).toBe("missing_ua");
   });
 
-  it("qualifies browser navigations and keeps a stable anonymous session hash", async () => {
+  it("qualifies browser navigations once per anonymous browser per UTC day", async () => {
     const { env, events } = environment();
     const view = await worker.fetch(new Request("https://pilot-example.com/", {
       headers: {
@@ -91,11 +91,12 @@ describe("site edge", () => {
     }), env as never);
     const cookie = view.headers.get("Set-Cookie")?.match(/dm_vid=([a-f0-9]{32})/)?.[1];
     expect(cookie).toBeTruthy();
+    expect(view.headers.get("Set-Cookie")).toContain("Max-Age=31536000");
     const viewPoint = events[0] as { blobs: string[] };
     expect(viewPoint.blobs[3]).toBe("human");
     expect(viewPoint.blobs[7]).toBe("browser_navigation");
     const firstSessionPoint = events[1] as { blobs: string[]; indexes: string[] };
-    expect(firstSessionPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test"]);
+    expect(firstSessionPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test", "XX"]);
     expect(firstSessionPoint.indexes).toEqual([viewPoint.blobs[6]]);
 
     const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
@@ -283,11 +284,13 @@ describe("site edge", () => {
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
     expect(await response.text()).toContain("independent referral website");
     const point = events[0] as { blobs: string[] };
+    const qualifiedPoint = events[1] as { blobs: string[] };
     expect(point.blobs.slice(10, 13)).toEqual(["service", "mobile", "search"]);
     expect(point.blobs[13]).toBe("TX");
     expect(point.blobs[14]).toMatch(/^(?:00-03|04-07|08-11|12-15|16-19|20-23)$/);
     expect(point.blobs.join(" ")).not.toContain("customer=private");
     expect(point.blobs.join(" ")).not.toContain("google.com");
+    expect(qualifiedPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test", "US"]);
   });
 
   it("keeps sensitive and executable probe paths fail-closed", async () => {
