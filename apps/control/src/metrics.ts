@@ -107,6 +107,7 @@ export interface RollupBatchResult {
 
 const AUTOMATIC_ROLLUP_LIMIT = 5;
 const EXACT_SESSION_EVENT = "qualified_session_v3";
+const EXACT_SESSION_INDEX_PREFIX = "qualified_v3:";
 
 function utcDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -235,13 +236,14 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const publishedDomainIds = expectedRows.results.map((row) => row.domain_id);
     if (publishedDomainIds.some((domainId) => !/^dom_[a-f0-9]+$/.test(domainId))) throw new Error("Published domain ID is invalid");
+    const exactSessionIndexes = publishedDomainIds.map((domainId) => `${EXACT_SESSION_INDEX_PREFIX}${domainId}`);
 
     const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged', 'click') GROUP BY index1, metric_date`;
     const queryUniqueRows = () => useExactSessionStream
       ? publishedDomainIds.length
         ? queryAnalytics<UniqueRow>(
           env,
-          `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sum(_sample_interval * double1) AS unique_visitors, sumIf(_sample_interval * double1, blob5 = 'US') AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = ${sqlString(EXACT_SESSION_EVENT)} AND index1 IN (${publishedDomainIds.map(sqlString).join(",")}) GROUP BY index1, metric_date`,
+          `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, sum(_sample_interval * double1) AS unique_visitors, sumIf(_sample_interval * double1, blob5 = 'US') AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = ${sqlString(EXACT_SESSION_EVENT)} AND index1 IN (${exactSessionIndexes.map(sqlString).join(",")}) AND blob3 IN (${publishedDomainIds.map(sqlString).join(",")}) GROUP BY blob3, metric_date`,
         )
         : Promise.resolve([])
       : queryAnalytics<UniqueRow>(env, `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`);

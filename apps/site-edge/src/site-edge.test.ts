@@ -102,7 +102,7 @@ describe("site edge", () => {
     expect(viewPoint.blobs[7]).toBe("browser_navigation");
     const firstSessionPoint = events[1] as { blobs: string[]; indexes: string[] };
     expect(firstSessionPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "XX"]);
-    expect(firstSessionPoint.indexes).toEqual(["dom_test"]);
+    expect(firstSessionPoint.indexes).toEqual(["qualified_v3:dom_test"]);
 
     const cookieHeader = `dm_vid=${visitorCookie}; dm_qd=${qualifiedCookie}`;
     await worker.fetch(new Request("https://pilot-example.com/services/repair", {
@@ -322,7 +322,7 @@ describe("site edge", () => {
     expect(point.blobs.join(" ")).not.toContain("customer=private");
     expect(point.blobs.join(" ")).not.toContain("google.com");
     expect(qualifiedPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "US"]);
-    expect(qualifiedPoint.indexes).toEqual(["dom_test"]);
+    expect(qualifiedPoint.indexes).toEqual(["qualified_v3:dom_test"]);
   });
 
   it("keeps sensitive and executable probe paths fail-closed", async () => {

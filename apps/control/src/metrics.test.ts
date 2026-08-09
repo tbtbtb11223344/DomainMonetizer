@@ -165,7 +165,7 @@ describe("analytics rollups", () => {
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
     expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v3'") && body.includes("index1 IN ('dom_1')"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob3 AS domain_id") && body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v3'") && body.includes("index1 IN ('qualified_v3:dom_1')") && body.includes("blob3 IN ('dom_1')"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);

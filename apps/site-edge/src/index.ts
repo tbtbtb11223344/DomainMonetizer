@@ -43,6 +43,7 @@ type ReferrerClass = "direct" | "internal" | "search" | "directory" | "social" |
 const VISITOR_COOKIE = "dm_vid";
 const QUALIFIED_DAY_COOKIE = "dm_qd";
 const QUALIFIED_SESSION_EVENT = "qualified_session_v3";
+const QUALIFIED_SESSION_INDEX_PREFIX = "qualified_v3:";
 const VISITOR_SESSION_SECONDS = 30 * 60;
 
 interface VisitorClassification {
@@ -206,10 +207,10 @@ function eventPoint(
 function qualifiedSessionPoint(snapshot: ReleaseSnapshot, country: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
   return {
     // One signed browser marker permits exactly one point per hostname and UTC
-    // day. Indexing by the query dimension keeps Analytics Engine's equitable
-    // sampling useful and avoids the high-cardinality per-visitor index that
-    // made exact aggregate queries unreadable.
-    indexes: [snapshot.domainId],
+    // day. A dedicated per-domain index isolates this low-volume stream from
+    // the tenant's much higher-volume view stream, which can otherwise make
+    // Analytics Engine sample qualified-session points on busy domains.
+    indexes: [`${QUALIFIED_SESSION_INDEX_PREFIX}${snapshot.domainId}`],
     blobs: [QUALIFIED_SESSION_EVENT, snapshot.hostname, snapshot.domainId, snapshot.releaseId, country],
     doubles: [1],
   };
