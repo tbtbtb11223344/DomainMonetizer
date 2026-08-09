@@ -124,6 +124,9 @@ export interface DomainMetricSummary {
   us_likely_human_views: number;
   unique_visitors: number;
   us_unique_visitors: number;
+  sampled_unique_visitors: number;
+  sampled_us_unique_visitors: number;
+  sampled_unique_sample_interval: number;
   clicks: number;
   max_sample_interval: number;
   unique_sample_interval: number;
@@ -132,6 +135,7 @@ export interface DomainMetricSummary {
 export interface MetricsOverview {
   telemetryStartDate: string;
   exactSessionStartDate: string;
+  sampledMetricDate: string | null;
   latestCompletedDate: string;
   rollupThrough: string | null;
   observedFullDays: number;
@@ -140,7 +144,7 @@ export interface MetricsOverview {
   rollupCoverageComplete: boolean;
   evidenceStatus: "collecting" | "insufficient_signal" | "review_ready";
   minimumReviewDays: number;
-  totals: { likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number };
+  totals: { likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; sampledUniqueVisitors: number; sampledUsUniqueVisitors: number; sampledUniqueSampleInterval: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number };
   domains: DomainMetricSummary[];
   health: { published: number; ready: number; reliable: number; failing: number; stale: number; unchecked: number; scheduledChecks: number; expectedScheduledChecks: number; readyScheduledChecks: number; reliabilityThreshold: number; lastCheckedAt: string | null };
   healthChecks: CurrentTenantHealth[];

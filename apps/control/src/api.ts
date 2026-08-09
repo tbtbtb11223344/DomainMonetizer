@@ -30,6 +30,9 @@ interface OverviewDomainRow extends HealthPortfolioDomain {
   likely_human_views: number | string;
   unique_visitors: number | string;
   us_unique_visitors: number | string;
+  sampled_unique_visitors: number | string;
+  sampled_us_unique_visitors: number | string;
+  sampled_unique_sample_interval: number | string;
   human_engaged_visits: number | string;
   max_sample_interval: number | string;
   unique_sample_interval: number | string;
@@ -214,11 +217,17 @@ export function mountApi(app: App): void {
     const minimumReviewDays = Number(cohort?.minimum_review_days ?? 14);
     const minimumQualifiedSessions = Number(cohort?.minimum_qualified_sessions ?? 10);
     const coverageNow = new Date();
+    const sampledDay = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<?")
+      .bind(telemetryStartDate, exactSessionStartDate)
+      .first<{ metric_date: string | null }>();
+    const sampledMetricDate = sampledDay?.metric_date ?? null;
     const domainWhere = requestedCohort ? " WHERE d.cohort_key=?" : "";
-    const domainBinds = requestedCohort ? [exactSessionStartDate, exactSessionStartDate, exactSessionStartDate, telemetryStartDate, requestedCohort] : [exactSessionStartDate, exactSessionStartDate, exactSessionStartDate, telemetryStartDate];
+    const domainBinds = requestedCohort
+      ? [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate, requestedCohort]
+      : [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate];
     const [domains, latestRun, latestHealth, monetizationState] = await Promise.all([
       c.env.DB.prepare(
-        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
+        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
       ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
@@ -251,15 +260,18 @@ export function mountApi(app: App): void {
       ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
         .bind(`${currentDate}T00:00:00.000Z`, currentDayEnd.toISOString()).all<ScheduledTenantHealthRow>()
       : { results: [] as ScheduledTenantHealthRow[] };
-    const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {
+    const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; sampledUniqueVisitors: number; sampledUsUniqueVisitors: number; sampledUniqueSampleInterval: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {
       sum.likelyHumanViews += Number(row.likely_human_views ?? 0);
       sum.uniqueVisitors += Number(row.unique_visitors ?? 0);
       sum.usUniqueVisitors += Number(row.us_unique_visitors ?? 0);
+      sum.sampledUniqueVisitors += Number(row.sampled_unique_visitors ?? 0);
+      sum.sampledUsUniqueVisitors += Number(row.sampled_us_unique_visitors ?? 0);
+      sum.sampledUniqueSampleInterval = Math.max(sum.sampledUniqueSampleInterval, Number(row.sampled_unique_sample_interval ?? 1));
       sum.humanEngagedVisits += Number(row.human_engaged_visits ?? 0);
       sum.maxSampleInterval = Math.max(sum.maxSampleInterval, Number(row.max_sample_interval ?? 1));
       sum.uniqueSampleInterval = Math.max(sum.uniqueSampleInterval, Number(row.unique_sample_interval ?? 1));
       return sum;
-    }, { likelyHumanViews: 0, uniqueVisitors: 0, usUniqueVisitors: 0, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
+    }, { likelyHumanViews: 0, uniqueVisitors: 0, usUniqueVisitors: 0, sampledUniqueVisitors: 0, sampledUsUniqueVisitors: 0, sampledUniqueSampleInterval: 1, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     const samplingDetected = totals.maxSampleInterval > 1;
     const sessionSamplingDetected = exactSessionDays < minimumReviewDays;
     const monetization = {
@@ -300,6 +312,7 @@ export function mountApi(app: App): void {
     return c.json({
       telemetryStartDate,
       exactSessionStartDate,
+      sampledMetricDate,
       cohortKey: cohort?.key ?? null,
       cohortLabel: cohort?.label ?? null,
       latestCompletedDate,
