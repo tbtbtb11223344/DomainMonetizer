@@ -7,7 +7,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 - Pilot allowlist: `mcneillsappliance.com`, `heavenlyaircondition.com`, and `phoenixroofcoating.net`.
 - Mode: natural-traffic measurement only; no active offer, routing policy, outbound affiliate action, click ledger entry, postback, or conversion.
 - Clean evidence boundary: `2026-08-05 UTC`.
-- Exact-session boundary: `2026-08-07 UTC`; the earlier retained day remains visible but cannot count because its tenant-indexed session query was sampled.
+- Exact-session v3 boundary: `2026-08-10 UTC`; v2 used a high-cardinality per-browser Analytics Engine index and its sampled distinct results remain contextual rather than being reported as zero exact uniques.
 - Decision window: at least 14 complete decision-grade UTC days (exact sessions plus verified canaries on the same day) and at least 10 exact qualified anonymous sessions across the pilot.
 - Runtime: two Cloudflare Workers, one D1 database, one KV namespace, and Analytics Engine; no VPS, Queue, R2, Workflow, Durable Object, or paid Cloudflare subscription.
 - Expansion authority: `expansion-01` is prepared but planned. Its ten local-service domains remain unpublished until the source, preview, DNS, and cohort-activation gates in `docs/expansion-01.md` are completed.

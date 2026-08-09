@@ -40,6 +40,11 @@ type PathClass = "root" | "contact" | "quote" | "booking" | "service" | "locatio
 type DeviceClass = "mobile" | "tablet" | "desktop" | "unknown";
 type ReferrerClass = "direct" | "internal" | "search" | "directory" | "social" | "other";
 
+const VISITOR_COOKIE = "dm_vid";
+const QUALIFIED_DAY_COOKIE = "dm_qd";
+const QUALIFIED_SESSION_EVENT = "qualified_session_v3";
+const VISITOR_SESSION_SECONDS = 30 * 60;
+
 interface VisitorClassification {
   visitorClass: VisitorClass;
   reason: string;
@@ -198,15 +203,47 @@ function eventPoint(
   };
 }
 
-function qualifiedSessionPoint(snapshot: ReleaseSnapshot, visitorIdHash: string, country: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
+function qualifiedSessionPoint(snapshot: ReleaseSnapshot, country: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
   return {
-    // Analytics Engine samples independently by index. A privacy-salted session
-    // hash prevents a burst on one hostname from sampling every qualified
-    // session for that tenant. The domain remains a bounded query dimension.
-    indexes: [visitorIdHash],
-    blobs: ["qualified_session", snapshot.hostname, snapshot.domainId, snapshot.releaseId, country],
+    // One signed browser marker permits exactly one point per hostname and UTC
+    // day. Indexing by the query dimension keeps Analytics Engine's equitable
+    // sampling useful and avoids the high-cardinality per-visitor index that
+    // made exact aggregate queries unreadable.
+    indexes: [snapshot.domainId],
+    blobs: [QUALIFIED_SESSION_EVENT, snapshot.hostname, snapshot.domainId, snapshot.releaseId, country],
     doubles: [1],
   };
+}
+
+function cookieValue(request: Request, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return request.headers.get("cookie")?.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`))?.[1] ?? null;
+}
+
+function utcDay(now = new Date()): { compact: string; secondsRemaining: number } {
+  const compact = now.toISOString().slice(0, 10).replaceAll("-", "");
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return { compact, secondsRemaining: Math.max(1, Math.ceil((next - now.getTime()) / 1000)) };
+}
+
+async function qualifiedDayCookie(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<string | null> {
+  const { compact, secondsRemaining } = utcDay();
+  const expected = await hmacSha256Hex(env.VISITOR_HASH_SALT, `qualified:v3:${compact}:${snapshot.hostname}`);
+  const current = cookieValue(request, QUALIFIED_DAY_COOKIE)?.match(/^(\d{8})\.([a-f0-9]{64})$/);
+  if (current?.[1] === compact && timingSafeEqualString(current[2]!, expected)) return null;
+  return `${QUALIFIED_DAY_COOKIE}=${compact}.${expected}; Max-Age=${secondsRemaining}; Path=/; Secure; HttpOnly; SameSite=Lax`;
+}
+
+async function recordQualifiedSession(
+  request: Request,
+  snapshot: ReleaseSnapshot,
+  env: Env,
+  country: string,
+): Promise<string | null> {
+  const marker = await qualifiedDayCookie(request, snapshot, env);
+  if (!marker) return null;
+  env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, country));
+  return marker;
 }
 
 async function writeHealthCanary(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<void> {
@@ -238,14 +275,14 @@ async function loadSnapshot(hostname: string, env: Env): Promise<ReleaseSnapshot
 }
 
 async function visitorHash(request: Request, env: Env): Promise<string | null> {
-  const cookie = request.headers.get("cookie")?.match(/(?:^|;\s*)dm_vid=([a-f0-9]{32})/)?.[1];
+  const cookie = cookieValue(request, VISITOR_COOKIE)?.match(/^[a-f0-9]{32}$/)?.[0];
   return cookie ? sha256Hex(`${env.VISITOR_HASH_SALT}:${new Date().toISOString().slice(0, 10)}:${cookie}`) : null;
 }
 
-async function pageVisitor(request: Request, env: Env): Promise<{ hash: string; cookie: string | null }> {
-  const existing = request.headers.get("cookie")?.match(/(?:^|;\s*)dm_vid=([a-f0-9]{32})/)?.[1];
+async function pageVisitor(request: Request, env: Env): Promise<{ hash: string; cookie: string }> {
+  const existing = cookieValue(request, VISITOR_COOKIE)?.match(/^[a-f0-9]{32}$/)?.[0];
   const id = existing ?? crypto.randomUUID().replaceAll("-", "");
-  return { hash: await sha256Hex(`${env.VISITOR_HASH_SALT}:${new Date().toISOString().slice(0, 10)}:${id}`), cookie: existing ? null : id };
+  return { hash: await sha256Hex(`${env.VISITOR_HASH_SALT}:${new Date().toISOString().slice(0, 10)}:${id}`), cookie: id };
 }
 
 async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<Response> {
@@ -261,8 +298,12 @@ async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env
   if (body.releaseId !== snapshot.releaseId) return new Response(null, { status: 409 });
   const classification = classifyVisitor(request, true);
   env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classification, hashedVisitor));
-  if (classification.visitorClass === "human") env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, hashedVisitor, ((request.cf as CfProperties | undefined)?.country ?? "XX")));
-  return withHeaders(new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } }));
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  if (classification.visitorClass === "human") {
+    const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"));
+    if (marker) headers.append("Set-Cookie", marker);
+  }
+  return withHeaders(new Response(null, { status: 204, headers }));
 }
 
 async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: string, env: Env): Promise<Response> {
@@ -371,8 +412,11 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const visitor = await pageVisitor(request, env);
     const classification = classifyVisitor(request);
     env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classification, visitor.hash));
-    if (classification.visitorClass === "human") env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, visitor.hash, ((request.cf as CfProperties | undefined)?.country ?? "XX")));
-    if (visitor.cookie) headers.append("Set-Cookie", `dm_vid=${visitor.cookie}; Max-Age=31536000; Path=/; Secure; HttpOnly; SameSite=Lax`);
+    if (classification.visitorClass === "human") {
+      const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"));
+      if (marker) headers.append("Set-Cookie", marker);
+    }
+    headers.append("Set-Cookie", `${VISITOR_COOKIE}=${visitor.cookie}; Max-Age=${VISITOR_SESSION_SECONDS}; Path=/; Secure; HttpOnly; SameSite=Lax`);
   }
   return withHeaders(new Response(request.method === "HEAD" ? null : snapshot.html, { headers }));
 }

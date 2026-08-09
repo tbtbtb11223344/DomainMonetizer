@@ -59,6 +59,10 @@ function environment(overrides: Record<string, string> = {}, state: "live" | "pa
   };
 }
 
+function responseCookie(response: Response, name: string): string | undefined {
+  return response.headers.get("Set-Cookie")?.match(new RegExp(`(?:^|,\\s*)${name}=([^;]+)`))?.[1];
+}
+
 describe("site edge", () => {
   it("serves the tenant selected by hostname with security headers", async () => {
     const { env, events } = environment();
@@ -79,43 +83,70 @@ describe("site edge", () => {
     expect(point.blobs[7]).toBe("missing_ua");
   });
 
-  it("qualifies browser navigations once per anonymous browser per UTC day", async () => {
+  it("qualifies a browser once per hostname and UTC day", async () => {
     const { env, events } = environment();
-    const view = await worker.fetch(new Request("https://pilot-example.com/", {
-      headers: {
-        Accept: "text/html,application/xhtml+xml",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
-      },
-    }), env as never);
-    const cookie = view.headers.get("Set-Cookie")?.match(/dm_vid=([a-f0-9]{32})/)?.[1];
-    expect(cookie).toBeTruthy();
-    expect(view.headers.get("Set-Cookie")).toContain("Max-Age=31536000");
+    const browserHeaders = {
+      Accept: "text/html,application/xhtml+xml",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+    };
+    const view = await worker.fetch(new Request("https://pilot-example.com/", { headers: browserHeaders }), env as never);
+    const visitorCookie = responseCookie(view, "dm_vid");
+    const qualifiedCookie = responseCookie(view, "dm_qd");
+    expect(visitorCookie).toMatch(/^[a-f0-9]{32}$/);
+    expect(qualifiedCookie).toMatch(/^\d{8}\.[a-f0-9]{64}$/);
+    expect(view.headers.get("Set-Cookie")).toContain("Max-Age=1800");
     const viewPoint = events[0] as { blobs: string[] };
     expect(viewPoint.blobs[3]).toBe("human");
     expect(viewPoint.blobs[7]).toBe("browser_navigation");
     const firstSessionPoint = events[1] as { blobs: string[]; indexes: string[] };
-    expect(firstSessionPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test", "XX"]);
-    expect(firstSessionPoint.indexes).toEqual([viewPoint.blobs[6]]);
+    expect(firstSessionPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "XX"]);
+    expect(firstSessionPoint.indexes).toEqual(["dom_test"]);
+
+    const cookieHeader = `dm_vid=${visitorCookie}; dm_qd=${qualifiedCookie}`;
+    await worker.fetch(new Request("https://pilot-example.com/services/repair", {
+      headers: { ...browserHeaders, Cookie: cookieHeader },
+    }), env as never);
 
     const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: `dm_vid=${cookie}`,
+        Cookie: cookieHeader,
         Origin: "https://pilot-example.com",
         "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
       },
       body: JSON.stringify({ releaseId: "rel_test" }),
     }), env as never);
     expect(engagement.status).toBe(204);
-    const engagementPoint = events[2] as { blobs: string[] };
+    expect(responseCookie(engagement, "dm_qd")).toBeUndefined();
+    const engagementPoint = events[3] as { blobs: string[] };
     expect(engagementPoint.blobs[3]).toBe("human");
     expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
-    const engagedSessionPoint = events[3] as { blobs: string[]; indexes: string[] };
-    expect(engagedSessionPoint.blobs[0]).toBe("qualified_session");
-    expect(engagedSessionPoint.indexes).toEqual([viewPoint.blobs[6]]);
+    expect(events.filter((point) => (point as { blobs: string[] }).blobs[0] === "qualified_session_v3")).toHaveLength(1);
+  });
+
+  it("lets a verified same-origin interaction qualify an initially unknown browser", async () => {
+    const { env, events } = environment();
+    const view = await worker.fetch(new Request("https://pilot-example.com/"), env as never);
+    const visitorCookie = responseCookie(view, "dm_vid");
+    expect(responseCookie(view, "dm_qd")).toBeUndefined();
+
+    const engagement = await worker.fetch(new Request("https://pilot-example.com/events/engaged", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `dm_vid=${visitorCookie}`,
+        Origin: "https://pilot-example.com",
+        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+      },
+      body: JSON.stringify({ releaseId: "rel_test" }),
+    }), env as never);
+
+    expect(engagement.status).toBe(204);
+    expect(responseCookie(engagement, "dm_qd")).toMatch(/^\d{8}\.[a-f0-9]{64}$/);
+    expect(events.map((point) => (point as { blobs: string[] }).blobs[0])).toEqual(["view", "engaged", "qualified_session_v3"]);
   });
 
   it("does not issue a session or record visitor events for a secret-hashed excluded source IP", async () => {
@@ -284,13 +315,14 @@ describe("site edge", () => {
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
     expect(await response.text()).toContain("independent referral website");
     const point = events[0] as { blobs: string[] };
-    const qualifiedPoint = events[1] as { blobs: string[] };
+    const qualifiedPoint = events[1] as { blobs: string[]; indexes: string[] };
     expect(point.blobs.slice(10, 13)).toEqual(["service", "mobile", "search"]);
     expect(point.blobs[13]).toBe("TX");
     expect(point.blobs[14]).toMatch(/^(?:00-03|04-07|08-11|12-15|16-19|20-23)$/);
     expect(point.blobs.join(" ")).not.toContain("customer=private");
     expect(point.blobs.join(" ")).not.toContain("google.com");
-    expect(qualifiedPoint.blobs).toEqual(["qualified_session", "pilot-example.com", "dom_test", "rel_test", "US"]);
+    expect(qualifiedPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "US"]);
+    expect(qualifiedPoint.indexes).toEqual(["dom_test"]);
   });
 
   it("keeps sensitive and executable probe paths fail-closed", async () => {

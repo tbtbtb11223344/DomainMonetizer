@@ -89,7 +89,7 @@ describe("analytics rollups", () => {
     expect(batch.plannedDates).toEqual(["2026-08-06"]);
     expect(batch.results).toEqual([{ skipped: false, metricDate: "2026-08-06", domainRows: 0, countryRows: 0, sourceRows: 0, canaryRows: 0, expectedCanaries: 0, observedCanaries: 0, canarySampleInterval: 1, telemetryVerified: false, maxSampleInterval: 1, uniqueSampleInterval: 1 }]);
     expect(batch.failures).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it("parses the SQL API envelope and rejects the old assumed array shape", () => {
@@ -143,8 +143,7 @@ describe("analytics rollups", () => {
     const { db, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
     const responses = [
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "12", engaged_visits: "4", likely_human_views: "7", bot_views: "3", unknown_views: "2", human_engaged_visits: "3", us_likely_human_views: "5", clicks: "0", max_sample_interval: "1" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "6", max_sample_interval: "1" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", us_unique_visitors: "4", max_sample_interval: "1" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "6", us_unique_visitors: "4", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "8", likely_human_views: "5", human_engaged_visits: "2", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "5", engaged_visits: "2", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
@@ -162,12 +161,11 @@ describe("analytics rollups", () => {
     const result = await rollupDate(environment(db), "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(result).toMatchObject({ skipped: false, domainRows: 1, countryRows: 1, sourceRows: 1, canaryRows: 1, expectedCanaries: 4, observedCanaries: 4, canarySampleInterval: 1, telemetryVerified: true, maxSampleInterval: 1, uniqueSampleInterval: 1 });
-    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
-    expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(8);
+    expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("AS unique_visitors") && body.includes("blob1 = 'qualified_session'") && !body.includes("blob5 = 'US'"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session'") && body.includes("blob5 = 'US'"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v3'") && body.includes("index1 IN ('dom_1')"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
@@ -204,7 +202,7 @@ describe("analytics rollups", () => {
     await rollupDate(env, "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(bodies.some((body) => body.includes("count(DISTINCT blob7)") && body.includes("blob1 = 'view'"))).toBe(true);
-    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session'"))).toBe(false);
+    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v3'"))).toBe(false);
   });
 
   it("clears stale traffic and country rows even when a rerun is empty", async () => {
@@ -228,8 +226,7 @@ describe("analytics rollups", () => {
     const { db, statements, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
     const responses = [
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "20", engaged_visits: "0", likely_human_views: "20", bot_views: "0", unknown_views: "0", human_engaged_visits: "0", us_likely_human_views: "20", clicks: "0", max_sample_interval: "10" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "2", max_sample_interval: "1" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", us_unique_visitors: "1", max_sample_interval: "20" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "2", us_unique_visitors: "1", max_sample_interval: "20" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "20", likely_human_views: "20", human_engaged_visits: "0", max_sample_interval: "10" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "20", engaged_visits: "0", max_sample_interval: "10" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
@@ -252,8 +249,7 @@ describe("analytics rollups", () => {
     const { db, statements, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
     const responses = [
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", views: "30", engaged_visits: "3", likely_human_views: "20", bot_views: "5", unknown_views: "5", human_engaged_visits: "2", us_likely_human_views: "12", clicks: "0", max_sample_interval: "3" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "8", max_sample_interval: "1" }] },
-      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", us_unique_visitors: "6", max_sample_interval: "1" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", unique_visitors: "8", us_unique_visitors: "6", max_sample_interval: "1" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", country: "US", views: "30", likely_human_views: "20", human_engaged_visits: "2", max_sample_interval: "3" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", visitor_class: "human", classification_reason: "browser_navigation", country: "US", asn: "7922", as_org: "Comcast Cable", views: "20", engaged_visits: "2", max_sample_interval: "3" }] },
       { data: [{ domain_id: "dom_1", metric_date: "2026-08-05", observed_canaries: "4", max_sample_interval: "1" }] },
@@ -274,7 +270,6 @@ describe("analytics rollups", () => {
   it("marks the event pipeline unverified when a scheduled canary is missing", async () => {
     const { db, statements, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
     const responses = [
-      { data: [] },
       { data: [] },
       { data: [] },
       { data: [] },
