@@ -330,18 +330,31 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
     }),
   });
   if (!internal.ok) return errorResponse(503, "Offer temporarily unavailable");
-  const payload = await internal.json<{ destinationUrl: string; clickId: string }>();
-  let destination: URL;
-  try {
-    destination = new URL(payload.destinationUrl);
-  } catch {
-    return errorResponse(503, "Offer temporarily unavailable");
+  const payload = await internal.json<{
+    destination?: { type: "redirect" | "phone"; value: string };
+    destinationUrl?: string | null;
+    clickId: string;
+  }>();
+  let destinationValue: string;
+  if (payload.destination?.type === "phone") {
+    if (!/^\+[1-9]\d{7,14}$/.test(payload.destination.value)) return errorResponse(503, "Offer temporarily unavailable");
+    destinationValue = `tel:${payload.destination.value}`;
+  } else {
+    const rawDestination = payload.destination?.type === "redirect" ? payload.destination.value : payload.destinationUrl;
+    if (!rawDestination) return errorResponse(503, "Offer temporarily unavailable");
+    let destination: URL;
+    try {
+      destination = new URL(rawDestination);
+    } catch {
+      return errorResponse(503, "Offer temporarily unavailable");
+    }
+    if (destination.protocol !== "https:") return errorResponse(503, "Offer temporarily unavailable");
+    destinationValue = destination.toString();
   }
-  if (destination.protocol !== "https:") return errorResponse(503, "Offer temporarily unavailable");
   if (!(await isTelemetryExcluded(request, env))) {
     env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", classification, hashedVisitor));
   }
-  return withHeaders(Response.redirect(destination, 302), { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
+  return withHeaders(Response.redirect(destinationValue, 302), { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
 }
 
 async function handle(request: Request, env: Env): Promise<Response> {

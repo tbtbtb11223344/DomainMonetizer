@@ -5,7 +5,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 ## Current operating state
 
 - Pilot allowlist: `mcneillsappliance.com`, `heavenlyaircondition.com`, and `phoenixroofcoating.net`.
-- Mode: natural-traffic measurement only; no active offer, routing policy, outbound affiliate action, click ledger entry, postback, or conversion.
+- Mode: natural-traffic measurement only; no active offer, affiliate campaign, routing policy, outbound affiliate action, click ledger entry, postback, or conversion.
 - Clean evidence boundary: `2026-08-05 UTC`.
 - Exact-session v3 boundary: `2026-08-10 UTC`; v2 used a high-cardinality per-browser Analytics Engine index and its sampled distinct results remain contextual rather than being reported as zero exact uniques.
 - Decision window: at least 14 complete decision-grade UTC days (exact sessions plus verified canaries on the same day) and at least 10 exact qualified anonymous sessions across the pilot.
@@ -32,7 +32,7 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 | Cost containment | Implemented for the pilot | `pnpm audit:cloudflare-costs` proves zero positive-price subscriptions, exact resources/bindings/hostnames, and D1 below 50 MiB | Obtain user approval for any paid product or VPS |
 | Control-data recovery | Sufficient for pilot | D1 Time Travel bookmark readback and seven-day Free retention; destructive restore requires explicit approval | Select, cost, and restore-test encrypted longer-retention backup storage |
 | Thousands-domain routing | Designed, not activated | Current full-zone topology and documented 1,000-routed-zone Worker ceiling | Before 900 routes, canary Cloudflare for SaaS or approve deterministic Worker shards |
-| Marketcall monetization | Deliberately deferred by user | Offer/routing/click/postback/conversion schema exists; all live counts are required to remain zero | Moderate the exact campaign, implement provider-specific routing/postbacks, then prove settled revenue |
+| Marketcall monetization | Dormant integration implemented; production remains disabled | Domain-bound campaign schema, hidden phone destinations, click ledger, authenticated idempotent postbacks, and conversion projection exist; all live monetization counts are still required to remain zero | Moderate the exact campaign and landing disclosure, provision a dedicated number, expose the webhook hostname, configure/test provider postbacks, and explicitly replace the measurement-only audit contract before activation |
 | Profitability | Unknown and not inferable yet | No monetization is active; traffic evidence is not payout evidence | Evaluate accepted revenue per valid session only after Marketcall is implemented and conversions settle |
 
 ## Repeatable evidence commands
@@ -69,7 +69,7 @@ At that review, the recommendation must distinguish:
 
 Do not implement these merely to make the system look more complete during the traffic experiment:
 
-- Marketcall API integration, numbers, CTAs, postbacks, or offer optimization;
+- activating a Marketcall campaign, live number, routing policy, public webhook hostname, or provider postback before the measurement-only contract is deliberately closed;
 - paid Cloudflare products, Cloudflare for SaaS, Worker shards, or a VPS;
 - bulk registrar/nameserver mutations or publishing additional domains;
 - a Queue/Workflow automation plane;

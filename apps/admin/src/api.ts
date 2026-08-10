@@ -151,7 +151,7 @@ export interface MetricsOverview {
   currentDaySchedule: { date: string; expectedByNowPerDomain: number; requiredByNowPerDomain: number; expectedChecks: number; requiredChecks: number; observedChecks: number; readyChecks: number; healthy: boolean; domains: Array<{ domainId: string; hostname: string; observedChecks: number; readyChecks: number; expectedByNow: number; requiredByNow: number; onSchedule: boolean; healthy: boolean }> };
   sampling: { detected: boolean; maxSampleInterval: number; uniqueSampleInterval: number; exactQualifiedSessions: boolean; kpiAvailable: boolean; exactDays: number; requiredDays: number };
   telemetry: { pipelineVerified: boolean; verifiedDays: number; expectedDays: number };
-  monetization: { activeOffers: number; activeRoutingPolicies: number; clicks: number; conversions: number; postbacks: number };
+  monetization: { activeOffers: number; activeCampaigns: number; activeRoutingPolicies: number; clicks: number; conversions: number; postbacks: number };
   reviewBlockers: string[];
   latestRun: { metric_date: string; status: string; expected_canaries: number; observed_canaries: number; canary_sample_interval: number; telemetry_verified: number; error_message: string | null; completed_at: string | null } | null;
 }

@@ -40,6 +40,7 @@ interface OverviewDomainRow extends HealthPortfolioDomain {
 
 interface MonetizationStateRow {
   active_offers: number | string;
+  active_campaigns: number | string;
   active_routing_policies: number | string;
   clicks: number | string;
   conversions: number | string;
@@ -138,9 +139,9 @@ async function compileRelease(
   const content = contentSchema.parse(JSON.parse(contentRow.content_json));
   const releaseId = randomId("rel");
   const enabledOffer = await env.DB.prepare(
-    "SELECT 1 AS found FROM routing_policies rp JOIN offers o ON o.id=rp.offer_id WHERE rp.status='active' AND o.status='active' AND (rp.domain_id=? OR rp.domain_id IS NULL) AND (rp.vertical IS NULL OR rp.vertical=?) AND (rp.country IS NULL OR rp.country=?) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) LIMIT 1",
+    "SELECT 1 AS found FROM routing_policies rp JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id AND ac.domain_id=? WHERE rp.status='active' AND o.status='active' AND (rp.domain_id=? OR rp.domain_id IS NULL) AND (rp.vertical IS NULL OR rp.vertical=?) AND (rp.country IS NULL OR rp.country=?) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) AND (rp.campaign_id IS NULL OR ac.status='active') AND (lower(o.provider)<>'marketcall' OR ac.status='active') LIMIT 1",
   )
-    .bind(domain.id, domain.vertical, domain.country, nowIso(), nowIso())
+    .bind(domain.id, domain.id, domain.vertical, domain.country, nowIso(), nowIso())
     .first<{ found: number }>();
   const offerEnabled = Boolean(enabledOffer);
   const html = state === "live" ? compileHomeServicesHtml({ content, hostname, releaseId, offerEnabled }) : pausedHtml(hostname);
@@ -231,7 +232,7 @@ export function mountApi(app: App): void {
       ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
-      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks").first<MonetizationStateRow>(),
+      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks").first<MonetizationStateRow>(),
     ]);
     const latestCompletedDate = latestCompletedUtcDate(coverageNow);
     const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days,COUNT(DISTINCT CASE WHEN telemetry_verified=1 THEN metric_date END) AS telemetry_verified_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 THEN metric_date END) AS exact_session_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 AND telemetry_verified=1 THEN metric_date END) AS decision_grade_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?")
@@ -276,6 +277,7 @@ export function mountApi(app: App): void {
     const sessionSamplingDetected = exactSessionDays < minimumReviewDays;
     const monetization = {
       activeOffers: Number(monetizationState?.active_offers ?? 0),
+      activeCampaigns: Number(monetizationState?.active_campaigns ?? 0),
       activeRoutingPolicies: Number(monetizationState?.active_routing_policies ?? 0),
       clicks: Number(monetizationState?.clicks ?? 0),
       conversions: Number(monetizationState?.conversions ?? 0),
@@ -590,10 +592,36 @@ const clickSchema = z.object({
   userAgentClass: z.enum(["human", "bot", "unknown"]),
 });
 
-interface OfferSelection {
+export interface OfferSelection {
   offer_id: string;
+  provider: string;
   destination_url: string;
-  metadata_json: string;
+  offer_metadata_json: string;
+  campaign_destination_type: string | null;
+  campaign_destination_value: string | null;
+  campaign_metadata_json: string | null;
+}
+
+export type ClickDestination =
+  | { type: "redirect"; value: string }
+  | { type: "phone"; value: string };
+
+export function resolveClickDestination(selection: OfferSelection, clickId: string): ClickDestination {
+  const destinationType = selection.campaign_destination_type ?? "redirect";
+  const rawValue = selection.campaign_destination_value ?? selection.destination_url;
+  if (destinationType === "phone") {
+    if (!/^\+[1-9]\d{7,14}$/.test(rawValue)) throw new Error("Invalid campaign phone destination");
+    return { type: "phone", value: rawValue };
+  }
+  if (destinationType !== "redirect") throw new Error("Unsupported campaign destination");
+  const destination = new URL(rawValue);
+  if (destination.protocol !== "https:") throw new Error("Unsafe offer destination");
+  const offerMetadata = jsonValue<{ clickIdParam?: string }>(selection.offer_metadata_json, {});
+  const campaignMetadata = jsonValue<{ clickIdParam?: string }>(selection.campaign_metadata_json ?? "{}", {});
+  const configuredParam = campaignMetadata.clickIdParam ?? offerMetadata.clickIdParam;
+  const clickIdParam = configuredParam && /^[a-zA-Z0-9_-]{1,32}$/.test(configuredParam) ? configuredParam : "subid";
+  destination.searchParams.set(clickIdParam, clickId);
+  return { type: "redirect", value: destination.toString() };
 }
 
 export function mountInternal(app: App): void {
@@ -604,18 +632,19 @@ export function mountInternal(app: App): void {
     if (!parsed.success) return c.json({ error: "Invalid click" }, 400);
     const input = parsed.data;
     const selection = await c.env.DB.prepare(
-      "SELECT o.id AS offer_id, o.destination_url, o.metadata_json FROM domains d JOIN routing_policies rp ON (rp.domain_id=d.id OR rp.domain_id IS NULL) JOIN offers o ON o.id=rp.offer_id WHERE d.id=? AND d.active_release_id=? AND d.lifecycle_status='published' AND rp.status='active' AND o.status='active' AND (rp.vertical IS NULL OR rp.vertical=d.vertical) AND (rp.country IS NULL OR rp.country=d.country) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) ORDER BY CASE WHEN rp.domain_id=d.id THEN 0 ELSE 1 END, rp.priority ASC, rp.weight DESC LIMIT 1",
+      "SELECT o.id AS offer_id, o.provider, o.destination_url, o.metadata_json AS offer_metadata_json, ac.destination_type AS campaign_destination_type, ac.destination_value AS campaign_destination_value, ac.metadata_json AS campaign_metadata_json FROM domains d JOIN routing_policies rp ON (rp.domain_id=d.id OR rp.domain_id IS NULL) JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id AND ac.domain_id=d.id WHERE d.id=? AND d.active_release_id=? AND d.lifecycle_status='published' AND rp.status='active' AND o.status='active' AND (rp.vertical IS NULL OR rp.vertical=d.vertical) AND (rp.country IS NULL OR rp.country=d.country) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) AND (rp.campaign_id IS NULL OR ac.status='active') AND (lower(o.provider)<>'marketcall' OR ac.status='active') ORDER BY CASE WHEN rp.domain_id=d.id THEN 0 ELSE 1 END, rp.priority ASC, rp.weight DESC LIMIT 1",
     ).bind(input.domainId, input.releaseId, nowIso(), nowIso()).first<OfferSelection>();
     if (!selection) return c.json({ error: "No eligible offer" }, 404);
-    const destination = new URL(selection.destination_url);
-    if (destination.protocol !== "https:") return c.json({ error: "Unsafe offer destination" }, 500);
     const clickId = randomId("clk");
-    const metadata = jsonValue<{ clickIdParam?: string }>(selection.metadata_json, {});
-    const clickIdParam = metadata.clickIdParam && /^[a-zA-Z0-9_-]{1,32}$/.test(metadata.clickIdParam) ? metadata.clickIdParam : "subid";
-    destination.searchParams.set(clickIdParam, clickId);
+    let destination: ClickDestination;
+    try {
+      destination = resolveClickDestination(selection, clickId);
+    } catch {
+      return c.json({ error: "Unsafe offer destination" }, 500);
+    }
     await c.env.DB.prepare("INSERT INTO clicks (id, domain_id, release_id, offer_id, slot, visitor_id_hash, likely_human, country, user_agent_class, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .bind(clickId, input.domainId, input.releaseId, selection.offer_id, input.slot, input.visitorIdHash, input.likelyHuman === null ? null : input.likelyHuman ? 1 : 0, input.country, input.userAgentClass, nowIso()).run();
-    return c.json({ destinationUrl: destination.toString(), clickId });
+    return c.json({ destination, destinationUrl: destination.type === "redirect" ? destination.value : null, clickId });
   });
 }
 

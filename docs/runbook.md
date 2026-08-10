@@ -24,6 +24,22 @@ pnpm --filter @domain-monetizer/control dev
 
 Production resource IDs are written into the Worker configs only after Cloudflare creates them. Secrets are installed with `wrangler secret put`; they never enter Git.
 
+## Dormant Marketcall integration
+
+The code can represent a provider offer separately from a domain-specific affiliate campaign. A Marketcall route is eligible only when the offer, campaign, and routing policy are all active and the campaign belongs to the exact domain. Redirect destinations must be HTTPS. Phone destinations must be E.164 and are returned only after `/go/:slot` records the click; the number is never rendered in tenant HTML.
+
+Use one static Marketcall tracking number per domain for the first economic pilot. Do not embed Marketcall's browser call-tracking script: it sends the current landing URL and referrer and can read advertising-attribution cookies, which exceeds this project's current privacy boundary. A static provider number sacrifices per-browser dynamic-number attribution, but the dedicated campaign still maps every provider conversion to one domain while DomainMonetizer records click-to-call intent independently.
+
+Before any Marketcall activation:
+
+1. Re-read the live offer and exact campaign rules. Confirm the domain's service intent, geography, accepted SEO traffic, call hours, qualified-call definition, hold period, and required disclosure.
+2. Obtain provider approval for the exact landing page and a dedicated campaign/number. Never reuse a campaign number across domains.
+3. Add `webhooks.multibrands.net` as a custom domain on the control Worker without changing the apex, mail, or other `multibrands.net` records. Keep Cloudflare Access on `admin.multibrands.net`; the webhook hostname is public only at the secret path.
+4. Generate a new independent `MARKETCALL_POSTBACK_SECRET` and install it with `wrangler secret put`. Do not reuse the internal-control, operator, Access, or runner secrets and do not store the webhook URL in Git.
+5. Configure separate provider postbacks for pending, accepted, and rejected states. Each URL fixes the corresponding `outcome` value and passes only the provider event/call ID, campaign/program ID, provider status, USD payout, and event time. Pass `subid` only when Marketcall actually preserves a DomainMonetizer `clk_...` identifier.
+6. Test the provider callback and status transition before sending traffic. Verify inbox authentication, campaign/domain attribution, idempotent retries, accepted payout, and a later refusal/clawback update. Never include caller phone, name, email, address, recording, raw landing URL, or referrer in the postback.
+7. Replace the measurement-only zero-ledger assertion with an explicit economic-pilot contract, deploy that contract, and verify it before activating the offer, campaign, and route. Until then `pnpm audit:pilot` must continue to report zero offers, campaigns, policies, clicks, conversions, and postbacks.
+
 ## Control-data recovery
 
 The production D1 database supports [Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/), which is always enabled and incurs no separate restore charge. Workers Free retains only seven days of point-in-time history. Confirm that recovery is available and record the current bookmark before a schema migration or other exceptional high-risk control-plane operation:

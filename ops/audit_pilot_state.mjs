@@ -226,6 +226,7 @@ if (!monetization) {
 } else {
   for (const [label, value] of Object.entries({
     "active offers": monetization.activeOffers,
+    "active campaigns": monetization.activeCampaigns,
     "active routing policies": monetization.activeRoutingPolicies,
     clicks: monetization.clicks,
     conversions: monetization.conversions,

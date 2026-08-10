@@ -10,6 +10,7 @@ export interface Env {
   CONTROL_SHARED_SECRET: string;
   CODEX_RUNNER_SECRET?: string;
   OPERATOR_API_TOKEN?: string;
+  MARKETCALL_POSTBACK_SECRET?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   ANALYTICS_READ_TOKEN?: string;
   ANALYTICS_DATASET: string;

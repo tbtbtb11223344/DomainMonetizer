@@ -3,6 +3,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { requireAdmin, requireSameOrigin } from "./auth";
 import { mountApi, mountInternal, mountRunner } from "./api";
 import { checkPublishedTenants } from "./health";
+import { handleMarketcallPostback } from "./marketcall";
 import { rollupMissingCompletedDates } from "./metrics";
 import type { Env, Variables } from "./types";
 
@@ -63,6 +64,7 @@ app.use(
 );
 
 app.get("/healthz", (c) => c.json({ ok: true, service: "control" }));
+app.on(["GET", "POST"], "/postbacks/marketcall/:token", handleMarketcallPostback);
 
 mountInternal(app);
 mountRunner(app);

@@ -26,7 +26,7 @@ That topology has a deliberate scale boundary. Cloudflare currently allows one W
 
 Cloudflare for SaaS currently includes 100 custom hostnames, supports up to 50,000 on non-Enterprise plans, and charges `$0.10` per additional hostname per month. Neither migration path is authorized by a traffic-only `review_ready` result: projected economics, an exact batch size, a current limit/cost audit, and explicit user approval are required first.
 
-The public Worker has no D1, Cloudflare API, provider, or admin credentials. The control Worker is the sole writer and is unavailable to the public except for narrowly authenticated internal endpoints and future signed provider postbacks.
+The public Worker has no D1, Cloudflare API, provider, or admin credentials. The control Worker is the sole writer and is unavailable to the public except for narrowly authenticated internal endpoints and the dormant token-authenticated Marketcall postback endpoint.
 
 Shared liveness and tenant readiness are deliberately separate. `/healthz` proves the Worker runtime is responding; `/readyz` additionally resolves the request hostname through the active KV pointer and validates the release snapshot. Tenant readiness is `200` only for a live release and `503` for a missing, malformed, unavailable, or paused tenant. Neither probe records a visitor event. An authenticated control-plane readiness request writes a separate `health_canary` Analytics Engine event; it has no visitor identifier and is excluded from every traffic query.
 
@@ -58,6 +58,9 @@ Rollback changes the active pointer to an earlier immutable release. Pausing cha
 - Content is structured JSON; AI cannot supply arbitrary HTML, scripts, URLs, or headers.
 - The displayed site identity is not an AI or import field. The renderer deterministically uses `{city} {vertical} Guide`, so former-business names cannot be reintroduced through generated content.
 - Outbound URLs are never accepted from the browser. The control plane resolves an active offer from server-side policy.
+- Marketcall policies require a domain-bound approved campaign in addition to an active offer. Redirect campaigns remain HTTPS-only. Call campaigns return only a validated E.164 number after the click is recorded, so the number is absent from tenant HTML and the public Worker never receives provider credentials.
+- Marketcall's browser call-tracking script is intentionally not embedded. The supported dormant path uses a dedicated provider tracking number per domain and keeps raw landing URLs, referrers, caller details, and advertising cookies outside DomainMonetizer's provider handoff.
+- Marketcall postbacks authenticate with an independent secret, retain only whitelisted attribution and economic fields, reject cross-domain click mismatches, and update one idempotent conversion projection as provider status changes. Pending payout is never counted as settled revenue.
 - Audit records accompany every mutation.
 - No raw IP addresses are retained. Visitor identifiers are short-lived, first-party random IDs and may be stored only as a one-way hash.
 

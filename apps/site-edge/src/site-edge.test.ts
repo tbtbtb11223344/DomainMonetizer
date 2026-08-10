@@ -25,7 +25,7 @@ const content = contentSchema.parse({
   image: { assetPath: "/__dm/assets/home-services-hero.webp", alt: "A technician checking a home appliance" },
 });
 
-function environment(overrides: Record<string, string> = {}, state: "live" | "paused" = "live", envOverrides: Record<string, string> = {}) {
+function environment(overrides: Record<string, string> = {}, state: "live" | "paused" = "live", envOverrides: Record<string, unknown> = {}) {
   const snapshot = releaseSnapshotSchema.parse({
     schemaVersion: 1,
     releaseId: "rel_test",
@@ -392,5 +392,59 @@ describe("site edge", () => {
     const { env } = environment();
     const response = await worker.fetch(new Request("https://pilot-example.com/go/primary"), env as never);
     expect(response.status).toBe(404);
+  });
+
+  it("opens an approved call campaign without exposing its number in tenant HTML", async () => {
+    const enabledSnapshot = releaseSnapshotSchema.parse({
+      schemaVersion: 1,
+      releaseId: "rel_test",
+      domainId: "dom_test",
+      hostname: "pilot-example.com",
+      state: "live",
+      templateKey: "home-services",
+      content,
+      offerSlots: [{ slot: "primary", enabled: true }],
+      html: compileHomeServicesHtml({ content, hostname: "pilot-example.com", releaseId: "rel_test", offerEnabled: true }),
+      compiledAt: "2026-08-04T12:00:00.000Z",
+    });
+    const control = { fetch: async () => Response.json({
+      destination: { type: "phone", value: "+18005550123" },
+      destinationUrl: null,
+      clickId: "clk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    }) };
+    const { env, events } = environment({ "release:rel_test": JSON.stringify(enabledSnapshot) }, "live", { CONTROL: control });
+
+    const page = await worker.fetch(new Request("https://pilot-example.com/"), env as never);
+    expect(await page.text()).not.toContain("+18005550123");
+    const response = await worker.fetch(new Request("https://pilot-example.com/go/primary", {
+      headers: { "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36" },
+    }), env as never);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("tel:+18005550123");
+    expect(events.some((point) => (point as { blobs: string[] }).blobs[0] === "click")).toBe(true);
+  });
+
+  it("rejects malformed phone destinations from the control plane", async () => {
+    const enabledSnapshot = releaseSnapshotSchema.parse({
+      schemaVersion: 1,
+      releaseId: "rel_test",
+      domainId: "dom_test",
+      hostname: "pilot-example.com",
+      state: "live",
+      templateKey: "home-services",
+      content,
+      offerSlots: [{ slot: "primary", enabled: true }],
+      html: compileHomeServicesHtml({ content, hostname: "pilot-example.com", releaseId: "rel_test", offerEnabled: true }),
+      compiledAt: "2026-08-04T12:00:00.000Z",
+    });
+    const control = { fetch: async () => Response.json({
+      destination: { type: "phone", value: "1-800-555-0123" },
+      clickId: "clk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    }) };
+    const { env } = environment({ "release:rel_test": JSON.stringify(enabledSnapshot) }, "live", { CONTROL: control });
+
+    const response = await worker.fetch(new Request("https://pilot-example.com/go/primary"), env as never);
+    expect(response.status).toBe(503);
   });
 });

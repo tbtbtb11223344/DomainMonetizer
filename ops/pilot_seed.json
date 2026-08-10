@@ -86,7 +86,7 @@
         { "question": "When does replacement make more sense?", "answer": "Compare the repair total with the appliance's age, overall condition, parts availability, energy use, and the installed cost of replacing it." }
       ],
       "cta": { "label": "Check local repair availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage for Denton. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "disclosure": "This website is an independent information and referral guide. This free service connects homeowners with local providers and is not the former business at this domain. Providers are independent; we do not perform, warrant, or guarantee their work. Confirm required licenses and insurance. People in photos are models, not participating providers. We may be paid when you contact a provider.",
       "image": { "assetPath": "/__dm/assets/appliance-repair.webp", "alt": "An appliance technician examining a repair in a workshop" }
     },
     "heavenlyaircondition.com": {
