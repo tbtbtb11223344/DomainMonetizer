@@ -38,7 +38,7 @@ Before any Marketcall activation:
 4. Generate a new independent `MARKETCALL_POSTBACK_SECRET` and install it with `wrangler secret put`. Do not reuse the internal-control, operator, Access, or runner secrets and do not store the webhook URL in Git.
 5. Configure separate provider postbacks for pending, accepted, and rejected states. Each URL fixes the corresponding `outcome` value and passes only the provider event/call ID, campaign/program ID, provider status, USD payout, and event time. Pass `subid` only when Marketcall actually preserves a DomainMonetizer `clk_...` identifier.
 6. Test the provider callback and status transition before sending traffic. Verify inbox authentication, campaign/domain attribution, idempotent retries, accepted payout, and a later refusal/clawback update. Never include caller phone, name, email, address, recording, raw landing URL, or referrer in the postback.
-7. Replace the measurement-only zero-ledger assertion with an explicit economic-pilot contract, deploy that contract, and verify it before activating the offer, campaign, and route. Until then `pnpm audit:pilot` must continue to report zero offers, campaigns, policies, clicks, conversions, and postbacks.
+7. Replace the measurement-only zero-ledger assertion with an explicit economic-pilot contract, deploy that contract, and verify it before activating the offer, campaign, and route. Until then `pnpm audit:pilot` must continue to report zero active offers, active campaigns, active policies, clicks, conversions, and postbacks. Draft offers and submitted campaigns may be retained for moderation reconciliation, but they must have no route.
 
 ## Control-data recovery
 

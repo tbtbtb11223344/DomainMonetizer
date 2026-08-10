@@ -125,46 +125,46 @@
         { "question": "Is the lowest quote usually the best choice?", "answer": "Not always. Weigh the diagnosis, license, scope, warranty, and schedule with the price. A vague quote may leave necessary work out." }
       ],
       "cta": { "label": "Check local HVAC availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage around Austin. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "disclosure": "This website is an independent information and referral guide. This free service connects homeowners with local providers and is not the former business at this domain. Providers are independent; we do not perform, warrant, or guarantee their work. Confirm required licenses and insurance. People in photos are models, not participating providers. We may be paid when you contact a provider.",
       "image": { "assetPath": "/__dm/assets/hvac-service.webp", "alt": "An HVAC technician checking an outdoor air-conditioning unit with gauges" }
     },
     "phoenixroofcoating.net": {
       "schemaVersion": 1,
       "locale": "en-US",
-      "vertical": "Roof coating",
+      "vertical": "Roof coating and replacement",
       "location": { "city": "Phoenix", "region": "Arizona", "country": "US" },
       "seo": {
-        "title": "Phoenix Roof Coating & Contractor Guide",
-        "description": "Prepare to compare roof coating options in Phoenix, including inspection findings, surface prep, product specifications, and warranties."
+        "title": "Phoenix Roof Coating & Replacement Guide",
+        "description": "Learn when a Phoenix roof may be suitable for coating and when its condition points to a full roof replacement."
       },
       "hero": {
-        "eyebrow": "Phoenix roof coating guide",
-        "title": "Protect your roof before the desert sun takes its toll.",
-        "summary": "Start with the roof you have. A useful proposal explains its condition, the prep work, the coating system, and the warranty."
+        "eyebrow": "Phoenix roof decision guide",
+        "title": "Know when coating is enough—and when it isn't.",
+        "summary": "Start with the roof's condition, then compare coating eligibility, required repairs, and full-replacement options before you choose a scope."
       },
-      "servicesHeading": "A solid coating proposal answers three questions",
+      "servicesHeading": "Coating or replacement? Start with three checks",
       "services": [
-        { "title": "What needs attention first?", "description": "The inspection should identify cracks, wet areas, drainage trouble, damaged foam, seams, and penetrations before coating begins." },
-        { "title": "How will the surface be prepared?", "description": "Ask how the roof will be cleaned, repaired, and primed—and which product will be applied at what coverage rate." },
-        { "title": "What does the warranty really cover?", "description": "Check the labor and material terms, exclusions, maintenance requirements, and who is responsible for a claim." }
+        { "title": "Is the roof suitable for coating?", "description": "The inspection should identify trapped moisture, structural trouble, drainage defects, damaged materials, and incompatible surfaces before coating is considered." },
+        { "title": "What must be repaired first?", "description": "Ask which leaks, seams, penetrations, wet areas, or substrate defects require correction before any coating or replacement work begins." },
+        { "title": "When is full replacement warranted?", "description": "Request the condition findings behind a replacement recommendation, the proposed system, total scope, permits, timing, and warranty." }
       ],
       "guide": {
-        "heading": "Get the roof condition and scope in writing",
+        "heading": "Get the roof condition and recommended scope in writing",
         "paragraphs": [
-          "Ask the contractor to identify the roof type, moisture findings, needed repairs, and why the proposed system is compatible with the surface.",
-          "The scope should list cleaning, primer, number of coats, coverage rate or finished thickness, and treatment around seams and penetrations.",
-          "Confirm weather limits, cure time, access requirements, cleanup, final inspection, and the documentation you receive when the job is finished.",
-          "A coating does not replace repairs for structural damage, saturated insulation, active leaks, or drainage defects. Those issues come first."
+          "Ask the contractor to identify the roof type, age, moisture findings, needed repairs, and whether the existing assembly can reasonably support a coating system.",
+          "For a coating proposal, the scope should list cleaning, repairs, primer, number of coats, coverage rate or finished thickness, and treatment around seams and penetrations.",
+          "For full replacement, compare tear-off or overlay assumptions, decking repairs, underlayment, roofing materials, ventilation, flashing, permits, cleanup, and warranties.",
+          "A coating does not correct structural damage, saturated insulation, severe deterioration, or drainage defects. If those conditions make coating unsuitable, obtain a written replacement scope."
         ]
       },
-      "faqHeading": "Questions Phoenix owners ask about roof coatings",
+      "faqHeading": "Questions Phoenix homeowners ask about coating and replacement",
       "faqs": [
         { "question": "Can every roof be coated?", "answer": "No. Existing material, condition, trapped moisture, drainage, and previous repairs all affect whether a coating is suitable." },
-        { "question": "Why does the application rate matter?", "answer": "The amount applied affects finished membrane thickness. The proposal should connect the roof area, product specification, and total material quantity." },
-        { "question": "What should I check in the warranty?", "answer": "Check the duration, labor and material coverage, maintenance requirements, ponding-water exclusions, transfer terms, and claim process." }
+        { "question": "When should I compare replacement instead?", "answer": "Compare full replacement when the roof has widespread deterioration, trapped moisture, structural defects, repeated failures, or a surface that is not compatible with coating." },
+        { "question": "What should I check in either warranty?", "answer": "Check the duration, labor and material coverage, exclusions, maintenance requirements, transfer terms, and the company responsible for handling a claim." }
       ],
-      "cta": { "label": "Check local coating availability", "supportingText": "Provider availability, pricing, and service terms vary.", "disabledText": "We're still setting up provider coverage around Phoenix. No request form or call line is live today.", "slot": "primary" },
-      "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+      "cta": { "label": "Check roof replacement availability", "supportingText": "For homeowners seeking a new roof or full replacement; repair and coating-only calls are not eligible.", "disabledText": "We're still setting up full roof replacement coverage around Phoenix. No request form or call line is live today.", "slot": "primary" },
+      "disclosure": "This website is an independent information and referral guide. This free service connects homeowners with local providers and is not the former business at this domain. Providers are independent; we do not perform, warrant, or guarantee their work. Confirm required licenses and insurance. People in photos are models, not participating providers. We may be paid when you contact a provider.",
       "image": { "assetPath": "/__dm/assets/roof-coating.webp", "alt": "An aerial view of a white reflective coating on a flat roof" }
     }
   }
