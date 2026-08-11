@@ -9,7 +9,7 @@ export interface EvidenceInputs {
   allTenantsReliable: boolean;
   telemetryPipelineVerified: boolean;
   sessionSamplingDetected: boolean;
-  measurementOnly: boolean;
+  monetizationStateValid: boolean;
   qualifiedSessions: number;
   minimumQualifiedSessions: number;
 }
@@ -27,7 +27,7 @@ export function decideEvidence(inputs: EvidenceInputs): EvidenceDecision {
     ...(!inputs.allTenantsReliable ? ["tenant_reliability"] : []),
     ...(!inputs.telemetryPipelineVerified ? ["telemetry_pipeline"] : []),
     ...(inputs.sessionSamplingDetected ? ["qualified_session_sampling"] : []),
-    ...(!inputs.measurementOnly ? ["monetization_state"] : []),
+    ...(!inputs.monetizationStateValid ? ["monetization_state"] : []),
     ...(inputs.observedFullDays >= inputs.minimumReviewDays && inputs.qualifiedSessions < inputs.minimumQualifiedSessions ? ["qualified_sessions"] : []),
   ];
   const operationalBlocker = blockers.some((blocker) => blocker !== "qualified_sessions");

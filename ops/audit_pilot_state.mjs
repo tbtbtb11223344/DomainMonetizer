@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { evaluateMarketcallPilotContract } from "./marketcall_pilot_contract.mjs";
 import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision, rollupCoveragePending } from "./pilot_decision.mjs";
 
 function parseEnv(source) {
@@ -101,6 +102,7 @@ async function readCurrentDayCanaries(environment, schedule, allowedDomainIds) {
 const environment = await loadEnvironment();
 const baseUrl = (environment.CONTROL_URL || "https://admin.multibrands.net").replace(/\/$/u, "");
 const pilotSeed = JSON.parse(await readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"));
+const marketcallPilot = JSON.parse(await readFile(new URL("./marketcall_pilot.json", import.meta.url), "utf8"));
 const pilotCohort = "pilot-2026-08-05";
 const expectedHostnames = pilotSeed.domains.map((domain) => domain.hostname).sort();
 const expectedByHostname = new Map(pilotSeed.domains.map((domain) => [domain.hostname, domain]));
@@ -228,21 +230,7 @@ try {
   issues.push(error instanceof Error ? error.message : "Current-day Analytics canary query failed");
 }
 
-const monetization = overview.monetization;
-if (!monetization) {
-  issues.push("Monetization state is missing from the control-plane overview");
-} else {
-  for (const [label, value] of Object.entries({
-    "active offers": monetization.activeOffers,
-    "active campaigns": monetization.activeCampaigns,
-    "active routing policies": monetization.activeRoutingPolicies,
-    clicks: monetization.clicks,
-    conversions: monetization.conversions,
-    postbacks: monetization.postbacks,
-  })) {
-    if (Number(value ?? 0) !== 0) issues.push(`Measurement-only invariant violated: ${label}=${Number(value)}`);
-  }
-}
+issues.push(...evaluateMarketcallPilotContract(overview.monetization, marketcallPilot));
 
 const report = {
   auditedAt: new Date().toISOString(),
@@ -279,6 +267,7 @@ const report = {
   notes: [
     "This audit uses only protected control-plane reads and /readyz; it does not create visitor views.",
     "observation_window and qualified_sessions are evidence outcomes, not operational failures.",
+    "The economic-pilot guard requires the three exact approved, domain-bound Marketcall routes and rejects failed or rejected provider postbacks.",
     ...(pendingRollupCoverage ? ["The one-day coverage gap is expected before the 04:17 UTC rollup and its ten-minute grace deadline."] : []),
   ],
 };

@@ -1,0 +1,33 @@
+{
+  "mode": "economic_pilot",
+  "provider": "marketcall",
+  "campaigns": [
+    {
+      "hostname": "heavenlyaircondition.com",
+      "offerId": "off_marketcall_8913",
+      "offerExternalId": "8913",
+      "campaignId": "camp_marketcall_351039",
+      "campaignExternalId": "351039",
+      "routingPolicyId": "route_marketcall_351039",
+      "destinationType": "phone"
+    },
+    {
+      "hostname": "mcneillsappliance.com",
+      "offerId": "off_marketcall_9881",
+      "offerExternalId": "9881",
+      "campaignId": "camp_marketcall_351038",
+      "campaignExternalId": "351038",
+      "routingPolicyId": "route_marketcall_351038",
+      "destinationType": "phone"
+    },
+    {
+      "hostname": "phoenixroofcoating.net",
+      "offerId": "off_marketcall_8917",
+      "offerExternalId": "8917",
+      "campaignId": "camp_marketcall_351040",
+      "campaignExternalId": "351040",
+      "routingPolicyId": "route_marketcall_351040",
+      "destinationType": "phone"
+    }
+  ]
+}

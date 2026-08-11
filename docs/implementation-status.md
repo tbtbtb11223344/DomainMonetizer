@@ -32,8 +32,8 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 | Cost containment | Implemented for the pilot | `pnpm audit:cloudflare-costs` proves zero positive-price subscriptions, exact resources/bindings/hostnames, and D1 below 50 MiB | Obtain user approval for any paid product or VPS |
 | Control-data recovery | Sufficient for pilot | D1 Time Travel bookmark readback and seven-day Free retention; destructive restore requires explicit approval | Select, cost, and restore-test encrypted longer-retention backup storage |
 | Thousands-domain routing | Designed, not activated | Current full-zone topology and documented 1,000-routed-zone Worker ceiling | Before 900 routes, canary Cloudflare for SaaS or approve deterministic Worker shards |
-| Marketcall monetization | Dormant integration implemented; production remains disabled | Domain-bound campaign schema, hidden phone destinations, click ledger, authenticated idempotent postbacks, and conversion projection exist; three SEO-only provider campaigns are under moderation with free approved numbers, while all active monetization counts remain zero | Obtain campaign and advertising-material approval, expose the webhook hostname, configure/test provider postbacks, and explicitly replace the measurement-only audit contract before activation |
-| Profitability | Unknown and not inferable yet | No monetization is active; traffic evidence is not payout evidence | Evaluate accepted revenue per valid session only after Marketcall is implemented and conversions settle |
+| Marketcall monetization | Economic pilot active on the three original domains | Three provider-approved SEO campaigns and accepted landing pages use dedicated static DIDs, domain-bound routes, tracked click-to-call handoff, a public secret-path webhook, idempotent conversion projection, and an exact active-route audit contract | Monitor route/provider drift, rejected postbacks, qualified calls, and settled payouts before expanding |
+| Profitability | Measuring | Marketcall clicks, settled conversions, and accepted payout are now collectible without mixing domains; traffic evidence alone remains insufficient | Evaluate accepted revenue per valid session after the seven-day provider hold period settles |
 
 ## Repeatable evidence commands
 
@@ -63,13 +63,13 @@ At that review, the recommendation must distinguish:
 - whether network, entry-intent, state, local-time, and engagement evidence fit the selected services;
 - whether any result is sampled or the telemetry pipeline is unverified;
 - which individual domains or verticals, if any, justify a larger measurement pilot; and
-- that traffic quality alone does not authorize Marketcall, paid infrastructure, or a claim of profitability.
+- that traffic quality or initial call volume alone does not authorize expansion, paid infrastructure, or a claim of profitability.
 
 ## Deliberately deferred work
 
 Do not implement these merely to make the system look more complete during the traffic experiment:
 
-- activating a Marketcall campaign, live number, routing policy, public webhook hostname, or provider postback before the measurement-only contract is deliberately closed;
+- reusing DIDs across domains, adding offers, or expanding traffic sources without a committed route contract and provider approval;
 - paid Cloudflare products, Cloudflare for SaaS, Worker shards, or a VPS;
 - bulk registrar/nameserver mutations or publishing additional domains;
 - a Queue/Workflow automation plane;

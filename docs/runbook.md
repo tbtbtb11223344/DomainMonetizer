@@ -24,21 +24,28 @@ pnpm --filter @domain-monetizer/control dev
 
 Production resource IDs are written into the Worker configs only after Cloudflare creates them. Secrets are installed with `wrangler secret put`; they never enter Git.
 
-## Dormant Marketcall integration
+## Marketcall economic pilot
 
 The code can represent a provider offer separately from a domain-specific affiliate campaign. A Marketcall route is eligible only when the offer, campaign, and routing policy are all active and the campaign belongs to the exact domain. Redirect destinations must be HTTPS. Phone destinations must be E.164 and are returned only after `/go/:slot` records the click; the number is never rendered in tenant HTML.
 
-Use one static Marketcall tracking number per domain for the first economic pilot. Do not embed Marketcall's browser call-tracking script: it sends the current landing URL and referrer and can read advertising-attribution cookies, which exceeds this project's current privacy boundary. A static provider number sacrifices per-browser dynamic-number attribution, but the dedicated campaign still maps every provider conversion to one domain while DomainMonetizer records click-to-call intent independently.
+Use one static Marketcall tracking number per domain for the first economic pilot. Marketcall permits a DID to appear on multiple websites, but dedicated numbers preserve domain attribution and remain the safer operating default. Do not embed Marketcall's browser call-tracking script: it sends the current landing URL and referrer and can read advertising-attribution cookies, which exceeds this project's current privacy boundary. A static provider number sacrifices per-browser dynamic-number attribution, but the dedicated campaign still maps every provider conversion to one domain while DomainMonetizer records click-to-call intent independently.
 
 Before any Marketcall activation:
 
 1. Re-read the live offer and exact campaign rules. Confirm the domain's service intent, geography, accepted SEO traffic, call hours, qualified-call definition, hold period, and required disclosure.
-2. Obtain provider approval for the exact landing page and a dedicated campaign/number. Never reuse a campaign number across domains.
+2. Obtain provider approval for the exact landing page and campaign. Keep one dedicated campaign number per pilot domain even when the provider permits reuse.
 3. Add `webhooks.multibrands.net` as a custom domain on the control Worker without changing the apex, mail, or other `multibrands.net` records. Keep Cloudflare Access on `admin.multibrands.net`; the webhook hostname is public only at the secret path.
 4. Generate a new independent `MARKETCALL_POSTBACK_SECRET` and install it with `wrangler secret put`. Do not reuse the internal-control, operator, Access, or runner secrets and do not store the webhook URL in Git.
-5. Configure separate provider postbacks for pending, accepted, and rejected states. Each URL fixes the corresponding `outcome` value and passes only the provider event/call ID, campaign/program ID, provider status, USD payout, and event time. Pass `subid` only when Marketcall actually preserves a DomainMonetizer `clk_...` identifier.
+5. Configure provider postbacks so Parsed and HOLD map to `outcome=pending`, Approved maps to `outcome=accepted`, and Refused, Non-qualified, and No connect map to `outcome=rejected`. Each URL passes only the call ID, campaign/program ID, provider status, USD payout, and currency. Static campaign numbers do not preserve a DomainMonetizer click ID, so do not invent or pass `subid`.
 6. Test the provider callback and status transition before sending traffic. Verify inbox authentication, campaign/domain attribution, idempotent retries, accepted payout, and a later refusal/clawback update. Never include caller phone, name, email, address, recording, raw landing URL, or referrer in the postback.
-7. Replace the measurement-only zero-ledger assertion with an explicit economic-pilot contract, deploy that contract, and verify it before activating the offer, campaign, and route. Until then `pnpm audit:pilot` must continue to report zero active offers, active campaigns, active policies, clicks, conversions, and postbacks. Draft offers and submitted campaigns may be retained for moderation reconciliation, but they must have no route.
+7. Deploy the explicit economic-pilot contract before activation. It requires the three exact domain/offer/campaign routes, permits real click and conversion counters, and fails on route drift or failed/rejected postback processing.
+
+The activation helper verifies the current provider offers and campaign attachment before it mutates D1. It requires an explicit postback-readiness assertion, records a D1 Time Travel bookmark, activates the exact committed routes, republishes all three domains, and verifies the resulting route set:
+
+```powershell
+pnpm activate:marketcall
+pnpm activate:marketcall -- --apply --postbacks-configured
+```
 
 ## Control-data recovery
 

@@ -58,7 +58,7 @@ Rollback changes the active pointer to an earlier immutable release. Pausing cha
 - Content is structured JSON; AI cannot supply arbitrary HTML, scripts, URLs, or headers.
 - The displayed site identity is not an AI or import field. The renderer deterministically uses `{city} {vertical} Guide`, so former-business names cannot be reintroduced through generated content.
 - Outbound URLs are never accepted from the browser. The control plane resolves an active offer from server-side policy.
-- Marketcall policies require a domain-bound approved campaign in addition to an active offer. Redirect campaigns remain HTTPS-only. Call campaigns return only a validated E.164 number after the click is recorded, so the number is absent from tenant HTML and the public Worker never receives provider credentials.
+- Marketcall policies require a domain-bound approved campaign in addition to an active offer. Redirect campaigns remain HTTPS-only. Call campaigns return only a validated E.164 number after the click is recorded, so the number is absent from tenant HTML and the public Worker never receives provider credentials. The economic pilot keeps one dedicated static DID per domain even though the provider permits reuse.
 - Marketcall's browser call-tracking script is intentionally not embedded. The supported dormant path uses a dedicated provider tracking number per domain and keeps raw landing URLs, referrers, caller details, and advertising cookies outside DomainMonetizer's provider handoff.
 - Marketcall postbacks authenticate with an independent secret, retain only whitelisted attribution and economic fields, reject cross-domain click mismatches, and update one idempotent conversion projection as provider status changes. Pending payout is never counted as settled revenue.
 - Audit records accompany every mutation.
@@ -88,7 +88,7 @@ The admin exposes an evidence status, not an automatic expansion command. The re
 
 `review_ready` can justify discussing a larger traffic pilot. It does not prove monetization economics; that requires the later Marketcall conversion and payout ledger.
 
-During the natural-traffic pilot, the protected overview also reports active offers, active campaigns, active routing policies, clicks, conversions, and postbacks. The evidence gate and deterministic operator audit require all six counts to remain zero, and the admin shows the state beside live readiness. This makes the measurement-only state an observable invariant rather than an assumption; enabling any monetization component deliberately blocks review and fails the pilot audit until the later Marketcall phase updates the operating contract.
+The protected overview reports the monetization mode, exact active route identities, active offers, campaigns and policies, clicks, conversions, postbacks, and provider-processing failures. In `measurement_only` mode, any activity blocks review. In `economic_pilot` mode, the deterministic audit requires the three exact approved domain/offer/campaign mappings, permits real economic counters, and fails on route drift or failed/rejected postbacks.
 
 Cloudflare Access is the interactive-admin boundary. The Zero Trust Free organization protects the browser session; operational API calls require both an Access service token and the separate operator bearer secret. Neither credential is exposed to the public Worker or reused as the edge/control secret.
 

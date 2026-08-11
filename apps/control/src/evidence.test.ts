@@ -10,7 +10,7 @@ const ready: EvidenceInputs = {
   allTenantsReliable: true,
   telemetryPipelineVerified: true,
   sessionSamplingDetected: false,
-  measurementOnly: true,
+  monetizationStateValid: true,
   qualifiedSessions: 10,
   minimumQualifiedSessions: 10,
 };
@@ -36,7 +36,7 @@ describe("scale-review evidence decision", () => {
   });
 
   it("blocks review if monetization is active during the measurement-only pilot", () => {
-    expect(decideEvidence({ ...ready, measurementOnly: false })).toEqual({ status: "collecting", blockers: ["monetization_state"] });
+    expect(decideEvidence({ ...ready, monetizationStateValid: false })).toEqual({ status: "collecting", blockers: ["monetization_state"] });
   });
 
   it("opens review only after every independent gate passes", () => {

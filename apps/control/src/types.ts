@@ -11,6 +11,7 @@ export interface Env {
   CODEX_RUNNER_SECRET?: string;
   OPERATOR_API_TOKEN?: string;
   MARKETCALL_POSTBACK_SECRET?: string;
+  MONETIZATION_MODE?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   ANALYTICS_READ_TOKEN?: string;
   ANALYTICS_DATASET: string;

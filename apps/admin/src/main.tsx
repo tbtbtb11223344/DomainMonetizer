@@ -176,8 +176,14 @@ function App() {
         ? `Qualified sessions are exact; country and source breakdowns are sampling-adjusted estimates (maximum ×${overview.sampling.maxSampleInterval}).`
         : "Analytics remains unsampled, so qualified sessions and quality breakdowns are exact.";
   const measurementOnly = overview
-    ? Object.values(overview.monetization).every((value) => value === 0)
+    ? overview.monetization.activeOffers === 0
+      && overview.monetization.activeCampaigns === 0
+      && overview.monetization.activeRoutingPolicies === 0
+      && overview.monetization.clicks === 0
+      && overview.monetization.conversions === 0
+      && overview.monetization.postbacks === 0
     : null;
+  const economicPilot = overview?.monetization.mode === "economic_pilot";
   const observationWindowOpen = overview?.reviewBlockers.includes("observation_window") ?? true;
   const exactUniqueKpiPending = Boolean(overview && !overview.sampling.kpiAvailable);
   const sampledEstimateAvailable = Boolean(exactUniqueKpiPending && overview?.sampledMetricDate);
@@ -215,12 +221,14 @@ function App() {
       {overview && overview.health.published > 0 && overview.health.ready < overview.health.published && <div className="error" role="alert"><span>Readiness</span>{overview.health.failing ? `${overview.health.failing} tenant check${overview.health.failing === 1 ? " is" : "s are"} failing.` : "A fresh end-to-end tenant check is pending."} Stale or unchecked tenants block scale review.</div>}
       {overview && !observationWindowOpen && overview.expectedFullDays > 0 && overview.health.reliable < overview.health.published && <div className="error" role="alert"><span>Reliability</span>{overview.health.published - overview.health.reliable} tenant{overview.health.published - overview.health.reliable === 1 ? " is" : "s are"} below 95% scheduled coverage or readiness. Scale review is blocked.</div>}
       {overview && !overview.currentDaySchedule.healthy && <div className="error" role="alert"><span>Schedule</span>Today's readiness cron is out of contract: {overview.currentDaySchedule.observedChecks} checks observed, {overview.currentDaySchedule.requiredChecks} required after grace, {overview.currentDaySchedule.expectedChecks} expected by now, and {overview.currentDaySchedule.readyChecks} ready. Reconcile the current day before trusting it.</div>}
-      {overview && measurementOnly === false && <div className="error" role="alert"><span>Monetization</span>The measurement-only invariant is broken: {overview.monetization.activeOffers} active offers, {overview.monetization.activeCampaigns} active campaigns, {overview.monetization.activeRoutingPolicies} active policies, {overview.monetization.clicks} clicks, {overview.monetization.conversions} conversions, and {overview.monetization.postbacks} postbacks. Natural-traffic review is blocked.</div>}
+      {overview && !economicPilot && measurementOnly === false && <div className="error" role="alert"><span>Monetization</span>The measurement-only invariant is broken: {overview.monetization.activeOffers} active offers, {overview.monetization.activeCampaigns} active campaigns, {overview.monetization.activeRoutingPolicies} active policies, {overview.monetization.clicks} clicks, {overview.monetization.conversions} conversions, and {overview.monetization.postbacks} postbacks. Natural-traffic review is blocked.</div>}
+      {overview && economicPilot && (overview.monetization.failedPostbacks > 0 || overview.monetization.rejectedPostbacks > 0) && <div className="error" role="alert"><span>Postbacks</span>{overview.monetization.failedPostbacks} failed and {overview.monetization.rejectedPostbacks} rejected provider callbacks require reconciliation.</div>}
+      {overview && economicPilot && <div className="info" role="status"><span>Economic pilot</span>{overview.monetization.activeRoutingPolicies} approved Marketcall route{overview.monetization.activeRoutingPolicies === 1 ? " is" : "s are"} live across {overview.monetization.activeCampaigns} active campaign{overview.monetization.activeCampaigns === 1 ? "" : "s"}. Calls, conversions, and postbacks are now expected pilot activity.</div>}
 
       <section className="toolbar">
         <label><span>Filter domains</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Hostname or vertical" /></label>
         <label><span>Measurement cohort</span><select value={cohort} onChange={(event) => { setCohort(event.target.value); setSelected(null); }}><option value="">All cohorts</option>{cohorts.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Runtime ready {overview?.health.ready ?? "—"}</span><span><i className={`dot ${measurementOnly === null ? "ready" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
+        <div className="legend"><span><i className="dot live" /> Live {totals.live}</span><span><i className="dot ready" /> Runtime ready {overview?.health.ready ?? "—"}</span><span><i className={`dot ${measurementOnly === null ? "ready" : economicPilot ? "live" : measurementOnly ? "measure" : "issue"}`} /> {measurementOnly === null ? "Measurement state loading" : economicPilot ? "Economic pilot" : measurementOnly ? "Measurement only" : "Monetization active"}</span></div>
       </section>
 
       <div className="content-grid">

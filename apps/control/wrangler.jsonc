@@ -9,6 +9,10 @@
     {
       "pattern": "admin.multibrands.net",
       "custom_domain": true
+    },
+    {
+      "pattern": "webhooks.multibrands.net",
+      "custom_domain": true
     }
   ],
   "assets": {
@@ -42,6 +46,7 @@
     "ACCESS_AUD": "43f1ce551d5b14fc4ca04dcf365f82971aff3e94874473a673e5ceb15904b999",
     "CLOUDFLARE_ACCOUNT_ID": "7a79cc0f0a61c4a47d066be454804f16",
     "ANALYTICS_DATASET": "domain_monetizer_events",
+    "MONETIZATION_MODE": "economic_pilot",
     "TELEMETRY_MIN_DATE": "2026-08-05",
     "EXACT_SESSION_MIN_DATE": "2026-08-10",
     "PREVIEW_HOSTNAME": "preview.multibrands.net"

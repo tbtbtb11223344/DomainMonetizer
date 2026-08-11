@@ -17,6 +17,7 @@ function baseline(overrides = {}) {
     accessApps: [{ name: "DomainMonetizer Admin", domain: "admin.multibrands.net", type: "self_hosted" }],
     workerDomains: [
       { hostname: "admin.multibrands.net", service: "domain-monetizer-control", environment: "production" },
+      { hostname: "webhooks.multibrands.net", service: "domain-monetizer-control", environment: "production" },
       { hostname: "heavenlyaircondition.com", service: "domain-monetizer-site-edge", environment: "production" },
       { hostname: "mcneillsappliance.com", service: "domain-monetizer-site-edge", environment: "production" },
       { hostname: "phoenixroofcoating.net", service: "domain-monetizer-site-edge", environment: "production" },

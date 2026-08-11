@@ -45,6 +45,19 @@ interface MonetizationStateRow {
   clicks: number | string;
   conversions: number | string;
   postbacks: number | string;
+  failed_postbacks: number | string;
+  rejected_postbacks: number | string;
+}
+
+interface ActiveMonetizationRouteRow {
+  hostname: string;
+  provider: string;
+  offer_external_id: string | null;
+  campaign_external_id: string | null;
+  destination_type: string | null;
+  offer_status: string;
+  campaign_status: string | null;
+  routing_status: string;
 }
 
 function jsonValue<T>(raw: string, fallback: T): T {
@@ -226,13 +239,14 @@ export function mountApi(app: App): void {
     const domainBinds = requestedCohort
       ? [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate, requestedCohort]
       : [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate];
-    const [domains, latestRun, latestHealth, monetizationState] = await Promise.all([
+    const [domains, latestRun, latestHealth, monetizationState, activeRoutes] = await Promise.all([
       c.env.DB.prepare(
         `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
       ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
-      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks").first<MonetizationStateRow>(),
+      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks").first<MonetizationStateRow>(),
+      c.env.DB.prepare("SELECT d.hostname,o.provider,o.external_id AS offer_external_id,ac.external_id AS campaign_external_id,ac.destination_type,o.status AS offer_status,ac.status AS campaign_status,rp.status AS routing_status FROM routing_policies rp JOIN domains d ON d.id=rp.domain_id JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id AND ac.domain_id=d.id WHERE rp.status='active' ORDER BY d.hostname,rp.priority,rp.id").all<ActiveMonetizationRouteRow>(),
     ]);
     const latestCompletedDate = latestCompletedUtcDate(coverageNow);
     const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days,COUNT(DISTINCT CASE WHEN telemetry_verified=1 THEN metric_date END) AS telemetry_verified_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 THEN metric_date END) AS exact_session_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 AND telemetry_verified=1 THEN metric_date END) AS decision_grade_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?")
@@ -275,15 +289,26 @@ export function mountApi(app: App): void {
     }, { likelyHumanViews: 0, uniqueVisitors: 0, usUniqueVisitors: 0, sampledUniqueVisitors: 0, sampledUsUniqueVisitors: 0, sampledUniqueSampleInterval: 1, humanEngagedVisits: 0, maxSampleInterval: 1, uniqueSampleInterval: 1 });
     const samplingDetected = totals.maxSampleInterval > 1;
     const sessionSamplingDetected = exactSessionDays < minimumReviewDays;
+    const monetizationMode = c.env.MONETIZATION_MODE === "economic_pilot" ? "economic_pilot" : "measurement_only";
     const monetization = {
+      mode: monetizationMode,
       activeOffers: Number(monetizationState?.active_offers ?? 0),
       activeCampaigns: Number(monetizationState?.active_campaigns ?? 0),
       activeRoutingPolicies: Number(monetizationState?.active_routing_policies ?? 0),
       clicks: Number(monetizationState?.clicks ?? 0),
       conversions: Number(monetizationState?.conversions ?? 0),
       postbacks: Number(monetizationState?.postbacks ?? 0),
+      failedPostbacks: Number(monetizationState?.failed_postbacks ?? 0),
+      rejectedPostbacks: Number(monetizationState?.rejected_postbacks ?? 0),
+      activeRoutes: activeRoutes.results,
     };
-    const measurementOnly = Object.values(monetization).every((value) => value === 0);
+    const measurementOnly = monetization.activeOffers === 0
+      && monetization.activeCampaigns === 0
+      && monetization.activeRoutingPolicies === 0
+      && monetization.clicks === 0
+      && monetization.conversions === 0
+      && monetization.postbacks === 0;
+    const monetizationStateValid = monetizationMode === "economic_pilot" || measurementOnly;
     const expectedScheduledChecksByDomain = new Map(domains.results.map((domain) => {
       const startDate = domain.measurement_started_at?.slice(0, 10) || telemetryStartDate;
       const effectiveStart = startDate > telemetryStartDate ? startDate : telemetryStartDate;
@@ -307,7 +332,7 @@ export function mountApi(app: App): void {
       allTenantsReliable,
       telemetryPipelineVerified,
       sessionSamplingDetected,
-      measurementOnly,
+      monetizationStateValid,
       qualifiedSessions: totals.uniqueVisitors,
       minimumQualifiedSessions,
     });
