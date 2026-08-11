@@ -29,5 +29,13 @@
       "routingPolicyId": "route_marketcall_351040",
       "destinationType": "phone"
     }
+  ],
+  "placements": [
+    {
+      "hostname": "anamechanical.com",
+      "expectedDomainVertical": "plumbing and HVAC",
+      "campaignId": "camp_marketcall_351039",
+      "routingPolicyId": "route_marketcall_351039_anamechanical"
+    }
   ]
 }

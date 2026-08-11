@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveClickDestination, type OfferSelection } from "./api";
-import { parseMarketcallFields } from "./marketcall";
+import { parseMarketcallFields, resolveConversionDomain } from "./marketcall";
 
 function selection(overrides: Partial<OfferSelection> = {}): OfferSelection {
   return {
@@ -89,5 +89,30 @@ describe("Marketcall postback parsing", () => {
     expect(() => parseMarketcallFields(new URLSearchParams({ event_id: "1", campaign_id: "2", outcome: "accepted", payout: "10", currency: "EUR" }))).toThrow("Unsupported currency");
     expect(() => parseMarketcallFields(new URLSearchParams({ event_id: "1", campaign_id: "2", outcome: "paid" }))).toThrow();
     expect(() => parseMarketcallFields(new URLSearchParams({ event_id: "1", campaign_id: "2", outcome: "accepted", subid: "visitor@example.com" }))).toThrow();
+  });
+});
+
+describe("Marketcall conversion attribution", () => {
+  const campaign = { id: "camp_hvac", offer_id: "offer_hvac", domain_id: "dom_primary" };
+
+  it("attributes a dedicated campaign to its only assigned domain", () => {
+    expect(resolveConversionDomain(campaign, ["dom_primary"], null)).toBe("dom_primary");
+  });
+
+  it("keeps a shared-DID conversion unattributed without a click id", () => {
+    expect(resolveConversionDomain(campaign, ["dom_primary", "dom_shared"], null)).toBeNull();
+  });
+
+  it("uses an exact click only when its domain has the campaign placement", () => {
+    expect(resolveConversionDomain(campaign, ["dom_primary", "dom_shared"], {
+      id: "clk_test",
+      offer_id: "offer_hvac",
+      domain_id: "dom_shared",
+    })).toBe("dom_shared");
+    expect(() => resolveConversionDomain(campaign, ["dom_primary", "dom_shared"], {
+      id: "clk_test",
+      offer_id: "offer_hvac",
+      domain_id: "dom_other",
+    })).toThrow("Click attribution mismatch");
   });
 });

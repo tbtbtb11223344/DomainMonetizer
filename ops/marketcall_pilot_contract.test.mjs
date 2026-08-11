@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest";
 import spec from "./marketcall_pilot.json" with { type: "json" };
-import { evaluateMarketcallPilotContract } from "./marketcall_pilot_contract.mjs";
+import { evaluateMarketcallPilotContract, expectedMarketcallRoutes } from "./marketcall_pilot_contract.mjs";
 
 function baseline(overrides = {}) {
   return {
     mode: "economic_pilot",
     activeOffers: 3,
     activeCampaigns: 3,
-    activeRoutingPolicies: 3,
+    activeRoutingPolicies: 4,
     clicks: 0,
     conversions: 0,
     postbacks: 0,
     failedPostbacks: 0,
     rejectedPostbacks: 0,
-    activeRoutes: spec.campaigns.map((campaign) => ({
-      hostname: campaign.hostname,
-      provider: spec.provider,
-      offer_external_id: campaign.offerExternalId,
-      campaign_external_id: campaign.campaignExternalId,
-      destination_type: campaign.destinationType,
+    activeRoutes: expectedMarketcallRoutes(spec).map((route) => ({
+      hostname: route.hostname,
+      provider: route.provider,
+      offer_external_id: route.offerExternalId,
+      campaign_external_id: route.campaignExternalId,
+      destination_type: route.destinationType,
       offer_status: "active",
       campaign_status: "active",
       routing_status: "active",
@@ -28,7 +28,7 @@ function baseline(overrides = {}) {
 }
 
 describe("Marketcall economic-pilot contract", () => {
-  it("accepts the three exact approved domain-bound routes", () => {
+  it("accepts three approved campaigns across four exact domain placements", () => {
     expect(evaluateMarketcallPilotContract(baseline(), spec)).toEqual([]);
   });
 

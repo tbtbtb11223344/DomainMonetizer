@@ -267,7 +267,7 @@ const report = {
   notes: [
     "This audit uses only protected control-plane reads and /readyz; it does not create visitor views.",
     "observation_window and qualified_sessions are evidence outcomes, not operational failures.",
-    "The economic-pilot guard requires the three exact approved, domain-bound Marketcall routes and rejects failed or rejected provider postbacks.",
+    "The economic-pilot guard requires the exact approved Marketcall campaign placements and rejects failed or rejected provider postbacks.",
     ...(pendingRollupCoverage ? ["The one-day coverage gap is expected before the 04:17 UTC rollup and its ten-minute grace deadline."] : []),
   ],
 };

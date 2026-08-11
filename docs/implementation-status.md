@@ -4,13 +4,13 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 
 ## Current operating state
 
-- Pilot allowlist: `mcneillsappliance.com`, `heavenlyaircondition.com`, and `phoenixroofcoating.net`.
-- Mode: natural-traffic measurement only; no active offer, affiliate campaign, routing policy, outbound affiliate action, click ledger entry, postback, or conversion.
+- Original pilot allowlist: `mcneillsappliance.com`, `heavenlyaircondition.com`, and `phoenixroofcoating.net`; the exact-match HVAC placement also includes `anamechanical.com`.
+- Mode: guarded Marketcall economic pilot with three active campaigns and four committed website placements; traffic measurement continues independently.
 - Clean evidence boundary: `2026-08-05 UTC`.
 - Exact-session v3 boundary: `2026-08-10 UTC`; v2 used a high-cardinality per-browser Analytics Engine index and its sampled distinct results remain contextual rather than being reported as zero exact uniques.
 - Decision window: at least 14 complete decision-grade UTC days (exact sessions plus verified canaries on the same day) and at least 10 exact qualified anonymous sessions across the pilot.
 - Runtime: two Cloudflare Workers, one D1 database, one KV namespace, and Analytics Engine; no VPS, Queue, R2, Workflow, Durable Object, or paid Cloudflare subscription.
-- Expansion authority: `expansion-01` is prepared but planned. Its ten local-service domains remain unpublished until the source, preview, DNS, and cohort-activation gates in `docs/expansion-01.md` are completed.
+- Expansion state: all ten `expansion-01` local-service guides are published; only `anamechanical.com` has an active offer because it exactly matches the approved HVAC campaign.
 
 ## Requirement ledger
 
@@ -32,8 +32,8 @@ This ledger maps the approved DomainMonetizer architecture to authoritative evid
 | Cost containment | Implemented for the pilot | `pnpm audit:cloudflare-costs` proves zero positive-price subscriptions, exact resources/bindings/hostnames, and D1 below 50 MiB | Obtain user approval for any paid product or VPS |
 | Control-data recovery | Sufficient for pilot | D1 Time Travel bookmark readback and seven-day Free retention; destructive restore requires explicit approval | Select, cost, and restore-test encrypted longer-retention backup storage |
 | Thousands-domain routing | Designed, not activated | Current full-zone topology and documented 1,000-routed-zone Worker ceiling | Before 900 routes, canary Cloudflare for SaaS or approve deterministic Worker shards |
-| Marketcall monetization | Economic pilot active on the three original domains | Three provider-approved SEO campaigns and accepted landing pages use dedicated static DIDs, domain-bound routes, tracked click-to-call handoff, a public secret-path webhook, idempotent conversion projection, and an exact active-route audit contract | Monitor route/provider drift, rejected postbacks, qualified calls, and settled payouts before expanding |
-| Profitability | Measuring | Marketcall clicks, settled conversions, and accepted payout are now collectible without mixing domains; traffic evidence alone remains insufficient | Evaluate accepted revenue per valid session after the seven-day provider hold period settles |
+| Marketcall monetization | Economic pilot active on four exact placements | Three provider-approved SEO campaigns serve the original domains with dedicated DIDs; `anamechanical.com` explicitly shares the approved HVAC DID. All placements use tracked click-to-call handoff, a public secret-path webhook, idempotent conversion projection, and an exact active-route audit contract | Monitor route/provider drift, rejected postbacks, qualified calls, and settled payouts before adding offers |
+| Profitability | Measuring | Marketcall clicks remain exact by website. Dedicated-DID conversions retain domain attribution; shared-HVAC-DID conversions remain honestly unattributed unless an exact click ID is supplied | Evaluate accepted revenue per valid session after the seven-day provider hold period settles |
 
 ## Repeatable evidence commands
 
@@ -69,7 +69,7 @@ At that review, the recommendation must distinguish:
 
 Do not implement these merely to make the system look more complete during the traffic experiment:
 
-- reusing DIDs across domains, adding offers, or expanding traffic sources without a committed route contract and provider approval;
+- reusing DIDs across additional domains, adding offers, or expanding traffic sources without a committed route contract, exact vertical match, and provider approval;
 - paid Cloudflare products, Cloudflare for SaaS, Worker shards, or a VPS;
 - bulk registrar/nameserver mutations or publishing additional domains;
 - a Queue/Workflow automation plane;

@@ -37,6 +37,27 @@ interface InboxRow {
   processing_status: string;
 }
 
+interface RouteDomainRow {
+  domain_id: string;
+}
+
+export function resolveConversionDomain(
+  campaign: CampaignRow,
+  routeDomainIds: string[],
+  click: ClickRow | null,
+): string | null {
+  const assignedDomains = [...new Set(routeDomainIds)];
+  if (click) {
+    if (click.offer_id !== campaign.offer_id || !assignedDomains.includes(click.domain_id)) {
+      throw new Error("Click attribution mismatch");
+    }
+    return click.domain_id;
+  }
+  if (assignedDomains.length === 1) return assignedDomains[0] ?? null;
+  if (assignedDomains.length === 0) return campaign.domain_id;
+  return null;
+}
+
 function firstValue(fields: URLSearchParams, names: string[]): string {
   for (const name of names) {
     const value = fields.get(name)?.trim();
@@ -138,23 +159,36 @@ export async function processMarketcallPostback(db: D1Database, input: Marketcal
       return { duplicate: false };
     }
 
+    const routeDomains = await db.prepare(
+      "SELECT DISTINCT domain_id FROM routing_policies WHERE campaign_id=? AND offer_id=? AND domain_id IS NOT NULL",
+    ).bind(campaign.id, campaign.offer_id).all<RouteDomainRow>();
+
     let click: ClickRow | null = null;
     if (input.clickId) {
       click = await db.prepare("SELECT id, offer_id, domain_id FROM clicks WHERE id=?").bind(input.clickId).first<ClickRow>();
-      if (!click || click.offer_id !== campaign.offer_id || click.domain_id !== campaign.domain_id) {
+      if (!click) {
         await db.prepare("UPDATE postback_inbox SET processing_status='rejected', error_message='Click attribution mismatch', processed_at=? WHERE id=?")
           .bind(nowIso(), inbox.id).run();
         return { duplicate: false };
       }
     }
 
+    let conversionDomainId: string | null;
+    try {
+      conversionDomainId = resolveConversionDomain(campaign, routeDomains.results.map((row) => row.domain_id), click);
+    } catch {
+      await db.prepare("UPDATE postback_inbox SET processing_status='rejected', error_message='Click attribution mismatch', processed_at=? WHERE id=?")
+        .bind(nowIso(), inbox.id).run();
+      return { duplicate: false };
+    }
+
     await db.prepare(
-      "INSERT INTO conversions (id, provider, external_id, click_id, domain_id, offer_id, status, payout_usd, occurred_at, received_at, raw_inbox_id) VALUES (?, 'marketcall', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(provider, external_id) DO UPDATE SET click_id=COALESCE(excluded.click_id, conversions.click_id), domain_id=excluded.domain_id, offer_id=excluded.offer_id, status=CASE WHEN excluded.status='pending' AND conversions.status IN ('accepted','rejected') THEN conversions.status ELSE excluded.status END, payout_usd=CASE WHEN excluded.status='pending' AND conversions.status IN ('accepted','rejected') THEN conversions.payout_usd ELSE excluded.payout_usd END, occurred_at=COALESCE(excluded.occurred_at, conversions.occurred_at), received_at=excluded.received_at, raw_inbox_id=excluded.raw_inbox_id",
+      "INSERT INTO conversions (id, provider, external_id, click_id, domain_id, offer_id, status, payout_usd, occurred_at, received_at, raw_inbox_id) VALUES (?, 'marketcall', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(provider, external_id) DO UPDATE SET click_id=COALESCE(excluded.click_id, conversions.click_id), domain_id=COALESCE(excluded.domain_id, conversions.domain_id), offer_id=excluded.offer_id, status=CASE WHEN excluded.status='pending' AND conversions.status IN ('accepted','rejected') THEN conversions.status ELSE excluded.status END, payout_usd=CASE WHEN excluded.status='pending' AND conversions.status IN ('accepted','rejected') THEN conversions.payout_usd ELSE excluded.payout_usd END, occurred_at=COALESCE(excluded.occurred_at, conversions.occurred_at), received_at=excluded.received_at, raw_inbox_id=excluded.raw_inbox_id",
     ).bind(
       randomId("conv"),
       input.eventId,
       click?.id ?? null,
-      campaign.domain_id,
+      conversionDomainId,
       campaign.offer_id,
       input.outcome,
       input.payoutUsd,

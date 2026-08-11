@@ -16,30 +16,46 @@ function routeKey(route) {
 }
 
 export function expectedMarketcallRoutes(spec) {
-  return spec.campaigns.map((campaign) => ({
+  const campaignsById = new Map(spec.campaigns.map((campaign) => [campaign.campaignId, campaign]));
+  const primaryRoutes = spec.campaigns.map((campaign) => ({
     hostname: campaign.hostname,
     provider: spec.provider,
     offerExternalId: campaign.offerExternalId,
     campaignExternalId: campaign.campaignExternalId,
     destinationType: campaign.destinationType,
-  })).sort((left, right) => routeKey(left).localeCompare(routeKey(right)));
+  }));
+  const sharedRoutes = (spec.placements ?? []).map((placement) => {
+    const campaign = campaignsById.get(placement.campaignId);
+    if (!campaign) return null;
+    return {
+      hostname: placement.hostname,
+      provider: spec.provider,
+      offerExternalId: campaign.offerExternalId,
+      campaignExternalId: campaign.campaignExternalId,
+      destinationType: campaign.destinationType,
+    };
+  }).filter(Boolean);
+  return [...primaryRoutes, ...sharedRoutes].sort((left, right) => routeKey(left).localeCompare(routeKey(right)));
 }
 
 export function evaluateMarketcallPilotContract(monetization, spec) {
   const issues = [];
   if (!monetization || typeof monetization !== "object") return ["Monetization state is missing from the control-plane overview"];
-  if (!spec || spec.mode !== "economic_pilot" || spec.provider !== "marketcall" || !Array.isArray(spec.campaigns) || spec.campaigns.length === 0) {
+  if (!spec || spec.mode !== "economic_pilot" || spec.provider !== "marketcall" || !Array.isArray(spec.campaigns) || spec.campaigns.length === 0 || !Array.isArray(spec.placements)) {
     return ["Committed Marketcall pilot contract is malformed"];
   }
 
   const expected = expectedMarketcallRoutes(spec);
-  const expectedCount = expected.length;
+  if (expected.length !== spec.campaigns.length + spec.placements.length) return ["Committed Marketcall placement references an unknown campaign"];
+  const expectedOfferCount = new Set(spec.campaigns.map((campaign) => campaign.offerExternalId)).size;
+  const expectedCampaignCount = new Set(spec.campaigns.map((campaign) => campaign.campaignExternalId)).size;
+  const expectedRouteCount = expected.length;
   if (monetization.mode !== spec.mode) issues.push(`Monetization mode=${String(monetization.mode)}, expected ${spec.mode}`);
-  for (const [label, value] of Object.entries({
-    "active offers": monetization.activeOffers,
-    "active campaigns": monetization.activeCampaigns,
-    "active routing policies": monetization.activeRoutingPolicies,
-  })) {
+  for (const [label, value, expectedCount] of [
+    ["active offers", monetization.activeOffers, expectedOfferCount],
+    ["active campaigns", monetization.activeCampaigns, expectedCampaignCount],
+    ["active routing policies", monetization.activeRoutingPolicies, expectedRouteCount],
+  ]) {
     if (Number(value) !== expectedCount) issues.push(`${label}=${Number(value)}, expected ${expectedCount}`);
   }
   for (const [label, value] of Object.entries({

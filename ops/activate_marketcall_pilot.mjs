@@ -90,6 +90,23 @@ if (Boolean(environment.CF_ACCESS_CLIENT_ID) !== Boolean(environment.CF_ACCESS_C
   throw new Error("CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET must be provided together");
 }
 const spec = JSON.parse(await readFile(new URL("./marketcall_pilot.json", import.meta.url), "utf8"));
+const campaignsById = new Map(spec.campaigns.map((campaign) => [campaign.campaignId, campaign]));
+const placements = [
+  ...spec.campaigns.map((campaign) => ({
+    hostname: campaign.hostname,
+    campaignId: campaign.campaignId,
+    routingPolicyId: campaign.routingPolicyId,
+    expectedDomainVertical: null,
+  })),
+  ...spec.placements,
+].map((placement) => {
+  const campaign = campaignsById.get(placement.campaignId);
+  if (!campaign) throw new Error(`${placement.hostname}: committed placement references an unknown campaign`);
+  return { ...placement, campaign };
+});
+if (new Set(placements.map((placement) => placement.hostname)).size !== placements.length) {
+  throw new Error("Committed Marketcall placements contain a duplicate hostname");
+}
 const providerChecks = [];
 for (const campaign of spec.campaigns) {
   const response = await fetch(`https://www.marketcall.com/api/v1/affiliate/offers/${campaign.offerExternalId}`, {
@@ -135,6 +152,17 @@ for (const campaign of spec.campaigns) {
     throw new Error(`${campaign.hostname}: D1 campaign destination is not a valid E.164 phone number`);
   }
 }
+const placementInventorySql = `SELECT hostname,vertical,country,lifecycle_status FROM domains WHERE hostname IN (${placements.map((placement) => sqlLiteral(placement.hostname)).join(",")}) ORDER BY hostname`;
+const placementInventory = d1(environment, placementInventorySql)[0]?.results ?? [];
+for (const placement of placements) {
+  const domain = placementInventory.find((row) => row.hostname === placement.hostname);
+  if (!domain || domain.country !== "US" || domain.lifecycle_status !== "published") {
+    throw new Error(`${placement.hostname}: placement target is not a published US domain`);
+  }
+  if (placement.expectedDomainVertical && domain.vertical !== placement.expectedDomainVertical) {
+    throw new Error(`${placement.hostname}: domain vertical=${String(domain.vertical)}, expected ${placement.expectedDomainVertical}`);
+  }
+}
 
 runWrangler(environment, ["d1", "time-travel", "info", "domain-monetizer", "--config", "apps/control/wrangler.jsonc"]);
 const now = new Date().toISOString();
@@ -144,16 +172,21 @@ for (const campaign of spec.campaigns) {
   statements.push(
     `UPDATE offers SET status='active',metadata_json=json_set(metadata_json,'$.routing_ready',1,'$.provider_offer_state','Active'),updated_at=${sqlLiteral(now)} WHERE id=${sqlLiteral(campaign.offerId)} AND provider='marketcall' AND external_id=${sqlLiteral(campaign.offerExternalId)}`,
     `UPDATE affiliate_campaigns SET status='active',metadata_json=json_set(metadata_json,'$.provider_campaign_state','Approved','$.provider_promo_state','Accepted'),approved_at=COALESCE(approved_at,${sqlLiteral(now)}),updated_at=${sqlLiteral(now)} WHERE id=${sqlLiteral(campaign.campaignId)} AND provider='marketcall' AND external_id=${sqlLiteral(campaign.campaignExternalId)} AND offer_id=${sqlLiteral(campaign.offerId)}`,
-    `INSERT INTO routing_policies (id,domain_id,vertical,country,offer_id,priority,weight,status,starts_at,ends_at,created_at,updated_at,campaign_id) SELECT ${sqlLiteral(campaign.routingPolicyId)},d.id,NULL,'US',o.id,10,100,'active',${sqlLiteral(now)},NULL,${sqlLiteral(now)},${sqlLiteral(now)},ac.id FROM domains d JOIN offers o ON o.id=${sqlLiteral(campaign.offerId)} JOIN affiliate_campaigns ac ON ac.id=${sqlLiteral(campaign.campaignId)} AND ac.offer_id=o.id AND ac.domain_id=d.id WHERE d.hostname=${sqlLiteral(campaign.hostname)} ON CONFLICT(id) DO UPDATE SET domain_id=excluded.domain_id,vertical=NULL,country='US',offer_id=excluded.offer_id,priority=10,weight=100,status='active',starts_at=COALESCE(routing_policies.starts_at,excluded.starts_at),ends_at=NULL,updated_at=excluded.updated_at,campaign_id=excluded.campaign_id`,
   );
 }
-statements.push(`INSERT INTO audit_log (id,actor,action,entity_type,entity_id,request_id,before_json,after_json,occurred_at) VALUES (${sqlLiteral(auditId)},'codex-cli','marketcall_pilot.activate','portfolio','pilot-2026-08-05',NULL,NULL,${sqlLiteral(JSON.stringify({ mode: spec.mode, campaigns: spec.campaigns.map(({ hostname, offerExternalId, campaignExternalId }) => ({ hostname, offerExternalId, campaignExternalId })) }))},${sqlLiteral(now)})`);
+for (const placement of placements) {
+  const { campaign } = placement;
+  statements.push(
+    `INSERT INTO routing_policies (id,domain_id,vertical,country,offer_id,priority,weight,status,starts_at,ends_at,created_at,updated_at,campaign_id) SELECT ${sqlLiteral(placement.routingPolicyId)},d.id,NULL,'US',o.id,10,100,'active',${sqlLiteral(now)},NULL,${sqlLiteral(now)},${sqlLiteral(now)},ac.id FROM domains d JOIN offers o ON o.id=${sqlLiteral(campaign.offerId)} JOIN affiliate_campaigns ac ON ac.id=${sqlLiteral(campaign.campaignId)} AND ac.offer_id=o.id WHERE d.hostname=${sqlLiteral(placement.hostname)} ON CONFLICT(id) DO UPDATE SET domain_id=excluded.domain_id,vertical=NULL,country='US',offer_id=excluded.offer_id,priority=10,weight=100,status='active',starts_at=COALESCE(routing_policies.starts_at,excluded.starts_at),ends_at=NULL,updated_at=excluded.updated_at,campaign_id=excluded.campaign_id`,
+  );
+}
+statements.push(`INSERT INTO audit_log (id,actor,action,entity_type,entity_id,request_id,before_json,after_json,occurred_at) VALUES (${sqlLiteral(auditId)},'codex-cli','marketcall_pilot.activate','portfolio','pilot-2026-08-05',NULL,NULL,${sqlLiteral(JSON.stringify({ mode: spec.mode, campaigns: spec.campaigns.map(({ hostname, offerExternalId, campaignExternalId }) => ({ hostname, offerExternalId, campaignExternalId })), placements: placements.map(({ hostname, campaign }) => ({ hostname, offerExternalId: campaign.offerExternalId, campaignExternalId: campaign.campaignExternalId })) }))},${sqlLiteral(now)})`);
 d1(environment, `${statements.join(";")};`);
 
 const releases = [];
-for (const campaign of spec.campaigns) {
-  const published = await callControl(environment, `/api/domains/${encodeURIComponent(campaign.hostname)}/publish`, { method: "POST", body: "{}" });
-  releases.push({ hostname: campaign.hostname, releaseId: published.releaseId });
+for (const placement of placements) {
+  const published = await callControl(environment, `/api/domains/${encodeURIComponent(placement.hostname)}/publish`, { method: "POST", body: "{}" });
+  releases.push({ hostname: placement.hostname, releaseId: published.releaseId });
 }
 
 const verification = d1(environment, "SELECT d.hostname,o.provider,o.external_id AS offer_external_id,ac.external_id AS campaign_external_id,ac.destination_type,o.status AS offer_status,ac.status AS campaign_status,rp.status AS routing_status FROM routing_policies rp JOIN domains d ON d.id=rp.domain_id JOIN offers o ON o.id=rp.offer_id JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id WHERE rp.status='active' ORDER BY d.hostname; SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks");
