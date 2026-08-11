@@ -88,10 +88,16 @@ async function installSecret(secret) {
   }
 }
 
-async function pilotHostnames() {
-  const seed = JSON.parse(await readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"));
-  const hostnames = seed.domains?.map((domain) => domain.hostname).filter(Boolean) ?? [];
-  if (!hostnames.length) throw new Error("The pilot seed does not contain any hostnames");
+async function publishedPortfolioHostnames() {
+  const seeds = await Promise.all([
+    readFile(new URL("./pilot_seed.json", import.meta.url), "utf8"),
+    readFile(new URL("./expansion_seed.json", import.meta.url), "utf8"),
+  ]);
+  const hostnames = [...new Set(seeds.flatMap((source) => {
+    const seed = JSON.parse(source);
+    return seed.domains?.map((domain) => domain.hostname).filter(Boolean) ?? [];
+  }))].sort();
+  if (!hostnames.length) throw new Error("The committed portfolio seeds do not contain any hostnames");
   return hostnames;
 }
 
@@ -110,7 +116,7 @@ async function verifyHost(hostname) {
 }
 
 async function verifyExclusion() {
-  const hostnames = await pilotHostnames();
+  const hostnames = await publishedPortfolioHostnames();
   for (let attempt = 1; attempt <= 6; attempt += 1) {
     const results = await Promise.all(hostnames.map(async (hostname) => ({ hostname, excluded: await verifyHost(hostname) })));
     const missing = results.filter((result) => !result.excluded);
@@ -129,5 +135,5 @@ if (!verifyOnly) {
 
 if (!configureOnly) {
   const verified = await verifyExclusion();
-  process.stdout.write(`Verified telemetry exclusion on ${verified} pilot domains with HEAD requests.\n`);
+  process.stdout.write(`Verified telemetry exclusion on ${verified} portfolio domains with HEAD requests.\n`);
 }
