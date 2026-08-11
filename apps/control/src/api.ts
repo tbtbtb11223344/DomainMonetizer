@@ -36,6 +36,9 @@ interface OverviewDomainRow extends HealthPortfolioDomain {
   human_engaged_visits: number | string;
   max_sample_interval: number | string;
   unique_sample_interval: number | string;
+  phone_actions: number | string;
+  unique_phone_actions: number | string;
+  provider_confirmed_calls: number | string;
 }
 
 interface MonetizationStateRow {
@@ -43,6 +46,9 @@ interface MonetizationStateRow {
   active_campaigns: number | string;
   active_routing_policies: number | string;
   clicks: number | string;
+  phone_actions: number | string;
+  unique_phone_actions: number | string;
+  provider_confirmed_calls: number | string;
   conversions: number | string;
   postbacks: number | string;
   failed_postbacks: number | string;
@@ -231,8 +237,9 @@ export function mountApi(app: App): void {
     const minimumReviewDays = Number(cohort?.minimum_review_days ?? 14);
     const minimumQualifiedSessions = Number(cohort?.minimum_qualified_sessions ?? 10);
     const coverageNow = new Date();
-    const sampledDay = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<?")
-      .bind(telemetryStartDate, exactSessionStartDate)
+    const latestCompletedDate = latestCompletedUtcDate(coverageNow);
+    const sampledDay = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?")
+      .bind(telemetryStartDate, latestCompletedDate)
       .first<{ metric_date: string | null }>();
     const sampledMetricDate = sampledDay?.metric_date ?? null;
     const domainWhere = requestedCohort ? " WHERE d.cohort_key=?" : "";
@@ -241,14 +248,13 @@ export function mountApi(app: App): void {
       : [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate];
     const [domains, latestRun, latestHealth, monetizationState, activeRoutes] = await Promise.all([
       c.env.DB.prepare(
-        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=3 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
+        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval, (SELECT COUNT(*) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1) AS phone_actions, (SELECT COUNT(DISTINCT COALESCE(c.visitor_id_hash,c.id)) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1 AND c.likely_human=1) AS unique_phone_actions, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='accepted') AS provider_confirmed_calls FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
       ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
-      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks").first<MonetizationStateRow>(),
+      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM clicks WHERE action_type='phone' AND measurement_eligible=1) AS phone_actions,(SELECT COUNT(DISTINCT domain_id || ':' || COALESCE(visitor_id_hash,id)) FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND likely_human=1) AS unique_phone_actions,(SELECT COUNT(*) FROM conversions WHERE status='accepted') AS provider_confirmed_calls,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks").first<MonetizationStateRow>(),
       c.env.DB.prepare("SELECT d.hostname,o.provider,o.external_id AS offer_external_id,ac.external_id AS campaign_external_id,ac.destination_type,o.status AS offer_status,ac.status AS campaign_status,rp.status AS routing_status FROM routing_policies rp JOIN domains d ON d.id=rp.domain_id JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id WHERE rp.status='active' ORDER BY d.hostname,rp.priority,rp.id").all<ActiveMonetizationRouteRow>(),
     ]);
-    const latestCompletedDate = latestCompletedUtcDate(coverageNow);
     const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days,COUNT(DISTINCT CASE WHEN telemetry_verified=1 THEN metric_date END) AS telemetry_verified_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 THEN metric_date END) AS exact_session_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 AND telemetry_verified=1 THEN metric_date END) AS decision_grade_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?")
       .bind(exactSessionStartDate, exactSessionStartDate, telemetryStartDate, latestCompletedDate)
       .first<{ metric_date: string | null; successful_days: number; telemetry_verified_days: number; exact_session_days: number; decision_grade_days: number }>();
@@ -296,6 +302,9 @@ export function mountApi(app: App): void {
       activeCampaigns: Number(monetizationState?.active_campaigns ?? 0),
       activeRoutingPolicies: Number(monetizationState?.active_routing_policies ?? 0),
       clicks: Number(monetizationState?.clicks ?? 0),
+      phoneActions: Number(monetizationState?.phone_actions ?? 0),
+      uniquePhoneActions: Number(monetizationState?.unique_phone_actions ?? 0),
+      providerConfirmedCalls: Number(monetizationState?.provider_confirmed_calls ?? 0),
       conversions: Number(monetizationState?.conversions ?? 0),
       postbacks: Number(monetizationState?.postbacks ?? 0),
       failedPostbacks: Number(monetizationState?.failed_postbacks ?? 0),
@@ -615,9 +624,11 @@ const clickSchema = z.object({
   likelyHuman: z.boolean().nullable(),
   country: z.string().max(8).nullable(),
   userAgentClass: z.enum(["human", "bot", "unknown"]),
+  measurementEligible: z.boolean().default(true),
 });
 
 export interface OfferSelection {
+  campaign_id: string | null;
   offer_id: string;
   provider: string;
   destination_url: string;
@@ -657,7 +668,7 @@ export function mountInternal(app: App): void {
     if (!parsed.success) return c.json({ error: "Invalid click" }, 400);
     const input = parsed.data;
     const selection = await c.env.DB.prepare(
-      "SELECT o.id AS offer_id, o.provider, o.destination_url, o.metadata_json AS offer_metadata_json, ac.destination_type AS campaign_destination_type, ac.destination_value AS campaign_destination_value, ac.metadata_json AS campaign_metadata_json FROM domains d JOIN routing_policies rp ON (rp.domain_id=d.id OR rp.domain_id IS NULL) JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id WHERE d.id=? AND d.active_release_id=? AND d.lifecycle_status='published' AND rp.status='active' AND o.status='active' AND (rp.vertical IS NULL OR rp.vertical=d.vertical) AND (rp.country IS NULL OR rp.country=d.country) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) AND (rp.campaign_id IS NULL OR ac.status='active') AND (lower(o.provider)<>'marketcall' OR ac.status='active') ORDER BY CASE WHEN rp.domain_id=d.id THEN 0 ELSE 1 END, rp.priority ASC, rp.weight DESC LIMIT 1",
+      "SELECT ac.id AS campaign_id, o.id AS offer_id, o.provider, o.destination_url, o.metadata_json AS offer_metadata_json, ac.destination_type AS campaign_destination_type, ac.destination_value AS campaign_destination_value, ac.metadata_json AS campaign_metadata_json FROM domains d JOIN routing_policies rp ON (rp.domain_id=d.id OR rp.domain_id IS NULL) JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id WHERE d.id=? AND d.active_release_id=? AND d.lifecycle_status='published' AND rp.status='active' AND o.status='active' AND (rp.vertical IS NULL OR rp.vertical=d.vertical) AND (rp.country IS NULL OR rp.country=d.country) AND (rp.starts_at IS NULL OR rp.starts_at<=?) AND (rp.ends_at IS NULL OR rp.ends_at>?) AND (rp.campaign_id IS NULL OR ac.status='active') AND (lower(o.provider)<>'marketcall' OR ac.status='active') ORDER BY CASE WHEN rp.domain_id=d.id THEN 0 ELSE 1 END, rp.priority ASC, rp.weight DESC LIMIT 1",
     ).bind(input.domainId, input.releaseId, nowIso(), nowIso()).first<OfferSelection>();
     if (!selection) return c.json({ error: "No eligible offer" }, 404);
     const clickId = randomId("clk");
@@ -667,8 +678,8 @@ export function mountInternal(app: App): void {
     } catch {
       return c.json({ error: "Unsafe offer destination" }, 500);
     }
-    await c.env.DB.prepare("INSERT INTO clicks (id, domain_id, release_id, offer_id, slot, visitor_id_hash, likely_human, country, user_agent_class, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(clickId, input.domainId, input.releaseId, selection.offer_id, input.slot, input.visitorIdHash, input.likelyHuman === null ? null : input.likelyHuman ? 1 : 0, input.country, input.userAgentClass, nowIso()).run();
+    await c.env.DB.prepare("INSERT INTO clicks (id, domain_id, release_id, offer_id, campaign_id, action_type, slot, visitor_id_hash, likely_human, country, user_agent_class, measurement_eligible, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(clickId, input.domainId, input.releaseId, selection.offer_id, selection.campaign_id, destination.type, input.slot, input.visitorIdHash, input.likelyHuman === null ? null : input.likelyHuman ? 1 : 0, input.country, input.userAgentClass, input.measurementEligible ? 1 : 0, nowIso()).run();
     return c.json({ destination, destinationUrl: destination.type === "redirect" ? destination.value : null, clickId });
   });
 }

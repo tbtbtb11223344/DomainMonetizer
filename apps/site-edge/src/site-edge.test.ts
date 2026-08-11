@@ -101,8 +101,8 @@ describe("site edge", () => {
     expect(viewPoint.blobs[3]).toBe("human");
     expect(viewPoint.blobs[7]).toBe("browser_navigation");
     const firstSessionPoint = events[1] as { blobs: string[]; indexes: string[] };
-    expect(firstSessionPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "XX"]);
-    expect(firstSessionPoint.indexes).toEqual(["qualified_v3:dom_test"]);
+    expect(firstSessionPoint.blobs).toEqual(["qualified_session_v4", "pilot-example.com", "dom_test", "rel_test", "XX"]);
+    expect(firstSessionPoint.indexes).toEqual([`qualified_v4:dom_test:${viewPoint.blobs[6]![0]}`]);
 
     const cookieHeader = `dm_vid=${visitorCookie}; dm_qd=${qualifiedCookie}`;
     await worker.fetch(new Request("https://pilot-example.com/services/repair", {
@@ -124,7 +124,7 @@ describe("site edge", () => {
     const engagementPoint = events[3] as { blobs: string[] };
     expect(engagementPoint.blobs[3]).toBe("human");
     expect(engagementPoint.blobs[6]).toBe(viewPoint.blobs[6]);
-    expect(events.filter((point) => (point as { blobs: string[] }).blobs[0] === "qualified_session_v3")).toHaveLength(1);
+    expect(events.filter((point) => (point as { blobs: string[] }).blobs[0] === "qualified_session_v4")).toHaveLength(1);
   });
 
   it("lets a verified same-origin interaction qualify an initially unknown browser", async () => {
@@ -146,7 +146,7 @@ describe("site edge", () => {
 
     expect(engagement.status).toBe(204);
     expect(responseCookie(engagement, "dm_qd")).toMatch(/^\d{8}\.[a-f0-9]{64}$/);
-    expect(events.map((point) => (point as { blobs: string[] }).blobs[0])).toEqual(["view", "engaged", "qualified_session_v3"]);
+    expect(events.map((point) => (point as { blobs: string[] }).blobs[0])).toEqual(["view", "engaged", "qualified_session_v4"]);
   });
 
   it("does not issue a session or record visitor events for a secret-hashed excluded source IP", async () => {
@@ -321,8 +321,8 @@ describe("site edge", () => {
     expect(point.blobs[14]).toMatch(/^(?:00-03|04-07|08-11|12-15|16-19|20-23)$/);
     expect(point.blobs.join(" ")).not.toContain("customer=private");
     expect(point.blobs.join(" ")).not.toContain("google.com");
-    expect(qualifiedPoint.blobs).toEqual(["qualified_session_v3", "pilot-example.com", "dom_test", "rel_test", "US"]);
-    expect(qualifiedPoint.indexes).toEqual(["qualified_v3:dom_test"]);
+    expect(qualifiedPoint.blobs).toEqual(["qualified_session_v4", "pilot-example.com", "dom_test", "rel_test", "US"]);
+    expect(qualifiedPoint.indexes).toEqual([`qualified_v4:dom_test:${point.blobs[6]![0]}`]);
   });
 
   it("keeps sensitive and executable probe paths fail-closed", async () => {
@@ -407,11 +407,15 @@ describe("site edge", () => {
       html: compileHomeServicesHtml({ content, hostname: "pilot-example.com", releaseId: "rel_test", offerEnabled: true }),
       compiledAt: "2026-08-04T12:00:00.000Z",
     });
-    const control = { fetch: async () => Response.json({
-      destination: { type: "phone", value: "+18005550123" },
-      destinationUrl: null,
-      clickId: "clk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    }) };
+    let clickInput: Record<string, unknown> | null = null;
+    const control = { fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+      clickInput = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        destination: { type: "phone", value: "+18005550123" },
+        destinationUrl: null,
+        clickId: "clk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      });
+    } };
     const { env, events } = environment({ "release:rel_test": JSON.stringify(enabledSnapshot) }, "live", { CONTROL: control });
 
     const page = await worker.fetch(new Request("https://pilot-example.com/"), env as never);
@@ -422,7 +426,46 @@ describe("site edge", () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("tel:+18005550123");
+    expect(clickInput).toMatchObject({ measurementEligible: true });
     expect(events.some((point) => (point as { blobs: string[] }).blobs[0] === "click")).toBe(true);
+  });
+
+  it("keeps operator phone actions in the audit ledger but out of measurement", async () => {
+    const enabledSnapshot = releaseSnapshotSchema.parse({
+      schemaVersion: 1,
+      releaseId: "rel_test",
+      domainId: "dom_test",
+      hostname: "pilot-example.com",
+      state: "live",
+      templateKey: "home-services",
+      content,
+      offerSlots: [{ slot: "primary", enabled: true }],
+      html: compileHomeServicesHtml({ content, hostname: "pilot-example.com", releaseId: "rel_test", offerEnabled: true }),
+      compiledAt: "2026-08-04T12:00:00.000Z",
+    });
+    const excludedIp = "203.0.113.19";
+    const salt = "a".repeat(64);
+    const excludedHash = await sha256Hex(`${salt}:${excludedIp}`);
+    let clickInput: Record<string, unknown> | null = null;
+    const control = { fetch: async (_input: RequestInfo | URL, init?: RequestInit) => {
+      clickInput = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ destination: { type: "phone", value: "+18005550123" }, clickId: "clk_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" });
+    } };
+    const { env, events } = environment({ "release:rel_test": JSON.stringify(enabledSnapshot) }, "live", {
+      CONTROL: control,
+      TELEMETRY_EXCLUSION_SECRET: `v1:${salt}:${excludedHash}`,
+    });
+
+    const response = await worker.fetch(new Request("https://pilot-example.com/go/primary", {
+      headers: {
+        "CF-Connecting-IP": excludedIp,
+        "User-Agent": "Mozilla/5.0 Chrome/140.0 Safari/537.36",
+      },
+    }), env as never);
+
+    expect(response.status).toBe(302);
+    expect(clickInput).toMatchObject({ measurementEligible: false });
+    expect(events.some((point) => (point as { blobs: string[] }).blobs[0] === "click")).toBe(false);
   });
 
   it("rejects malformed phone destinations from the control plane", async () => {

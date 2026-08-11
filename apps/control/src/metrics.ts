@@ -106,8 +106,9 @@ export interface RollupBatchResult {
 }
 
 const AUTOMATIC_ROLLUP_LIMIT = 5;
-const EXACT_SESSION_EVENT = "qualified_session_v3";
-const EXACT_SESSION_INDEX_PREFIX = "qualified_v3:";
+const EXACT_SESSION_EVENT = "qualified_session_v4";
+const EXACT_SESSION_INDEX_PREFIX = "qualified_v4:";
+const EXACT_SESSION_SHARDS = "0123456789abcdef".split("");
 
 function utcDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -236,15 +237,16 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     ).bind(`${metricDate}T00:00:00.000Z`, `${utcDate(endDate)}T00:00:00.000Z`).all<ExpectedCanaryRow>();
     const publishedDomainIds = expectedRows.results.map((row) => row.domain_id);
     if (publishedDomainIds.some((domainId) => !/^dom_[a-f0-9]+$/.test(domainId))) throw new Error("Published domain ID is invalid");
-    const exactSessionIndexes = publishedDomainIds.map((domainId) => `${EXACT_SESSION_INDEX_PREFIX}${domainId}`);
-
     const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged', 'click') GROUP BY index1, metric_date`;
     const queryUniqueRows = () => useExactSessionStream
       ? publishedDomainIds.length
-        ? queryAnalytics<UniqueRow>(
-          env,
-          `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, sum(_sample_interval * double1) AS unique_visitors, sumIf(_sample_interval * double1, blob5 = 'US') AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = ${sqlString(EXACT_SESSION_EVENT)} AND index1 IN (${exactSessionIndexes.map(sqlString).join(",")}) AND blob3 IN (${publishedDomainIds.map(sqlString).join(",")}) GROUP BY blob3, metric_date`,
-        )
+        ? Promise.all(publishedDomainIds.map((domainId) => {
+          const shardIndexes = EXACT_SESSION_SHARDS.map((shard) => `${EXACT_SESSION_INDEX_PREFIX}${domainId}:${shard}`);
+          return queryAnalytics<UniqueRow>(
+            env,
+            `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, sum(_sample_interval * double1) AS unique_visitors, sumIf(_sample_interval * double1, blob5 = 'US') AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = ${sqlString(EXACT_SESSION_EVENT)} AND index1 IN (${shardIndexes.map(sqlString).join(",")}) AND blob3 = ${sqlString(domainId)} GROUP BY blob3, metric_date`,
+          );
+        })).then((rows) => rows.flat())
         : Promise.resolve([])
       : queryAnalytics<UniqueRow>(env, `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`);
     const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, country`;
@@ -282,7 +284,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       const expected = expectedByDomain.get(domainId) ?? 0;
       return expected > 0 && observedByDomain.get(domainId) === expected && (canarySampleByDomain.get(domainId) ?? 1) === 1;
     });
-    const telemetryVersion = useExactSessionStream ? 3 : 2;
+    const telemetryVersion = useExactSessionStream ? 4 : 2;
     const timestamp = nowIso();
     const statements: D1PreparedStatement[] = [
       env.DB.prepare(`UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, us_unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=${telemetryVersion}, updated_at=? WHERE metric_date=?`)

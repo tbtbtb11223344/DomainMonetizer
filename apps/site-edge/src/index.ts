@@ -42,8 +42,8 @@ type ReferrerClass = "direct" | "internal" | "search" | "directory" | "social" |
 
 const VISITOR_COOKIE = "dm_vid";
 const QUALIFIED_DAY_COOKIE = "dm_qd";
-const QUALIFIED_SESSION_EVENT = "qualified_session_v3";
-const QUALIFIED_SESSION_INDEX_PREFIX = "qualified_v3:";
+const QUALIFIED_SESSION_EVENT = "qualified_session_v4";
+const QUALIFIED_SESSION_INDEX_PREFIX = "qualified_v4:";
 const VISITOR_SESSION_SECONDS = 30 * 60;
 
 interface VisitorClassification {
@@ -204,13 +204,14 @@ function eventPoint(
   };
 }
 
-function qualifiedSessionPoint(snapshot: ReleaseSnapshot, country: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
+function qualifiedSessionPoint(snapshot: ReleaseSnapshot, country: string, visitorIdHash: string): { blobs: string[]; doubles: number[]; indexes: string[] } {
+  const shard = visitorIdHash.slice(0, 1);
   return {
     // One signed browser marker permits exactly one point per hostname and UTC
-    // day. A dedicated per-domain index isolates this low-volume stream from
-    // the tenant's much higher-volume view stream, which can otherwise make
-    // Analytics Engine sample qualified-session points on busy domains.
-    indexes: [`${QUALIFIED_SESSION_INDEX_PREFIX}${snapshot.domainId}`],
+    // day. Sixteen bounded per-domain shards distribute write bursts without
+    // introducing a high-cardinality visitor index. The hash selects a shard
+    // but is never written to this anonymous session stream.
+    indexes: [`${QUALIFIED_SESSION_INDEX_PREFIX}${snapshot.domainId}:${shard}`],
     blobs: [QUALIFIED_SESSION_EVENT, snapshot.hostname, snapshot.domainId, snapshot.releaseId, country],
     doubles: [1],
   };
@@ -229,7 +230,7 @@ function utcDay(now = new Date()): { compact: string; secondsRemaining: number }
 
 async function qualifiedDayCookie(request: Request, snapshot: ReleaseSnapshot, env: Env): Promise<string | null> {
   const { compact, secondsRemaining } = utcDay();
-  const expected = await hmacSha256Hex(env.VISITOR_HASH_SALT, `qualified:v3:${compact}:${snapshot.hostname}`);
+  const expected = await hmacSha256Hex(env.VISITOR_HASH_SALT, `qualified:v4:${compact}:${snapshot.hostname}`);
   const current = cookieValue(request, QUALIFIED_DAY_COOKIE)?.match(/^(\d{8})\.([a-f0-9]{64})$/);
   if (current?.[1] === compact && timingSafeEqualString(current[2]!, expected)) return null;
   return `${QUALIFIED_DAY_COOKIE}=${compact}.${expected}; Max-Age=${secondsRemaining}; Path=/; Secure; HttpOnly; SameSite=Lax`;
@@ -240,10 +241,11 @@ async function recordQualifiedSession(
   snapshot: ReleaseSnapshot,
   env: Env,
   country: string,
+  visitorIdHash: string,
 ): Promise<string | null> {
   const marker = await qualifiedDayCookie(request, snapshot, env);
   if (!marker) return null;
-  env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, country));
+  env.EVENTS.writeDataPoint(qualifiedSessionPoint(snapshot, country, visitorIdHash));
   return marker;
 }
 
@@ -301,7 +303,7 @@ async function handleEngagement(request: Request, snapshot: ReleaseSnapshot, env
   env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "engaged", classification, hashedVisitor));
   const headers = new Headers({ "Cache-Control": "no-store" });
   if (classification.visitorClass === "human") {
-    const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"));
+    const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"), hashedVisitor);
     if (marker) headers.append("Set-Cookie", marker);
   }
   return withHeaders(new Response(null, { status: 204, headers }));
@@ -313,6 +315,7 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
   const classification = classifyVisitor(request, true);
   const cf = request.cf as CfProperties | undefined;
   const hashedVisitor = await visitorHash(request, env);
+  const measurementEligible = !(await isTelemetryExcluded(request, env));
   const internal = await env.CONTROL.fetch("https://control.internal/internal/click", {
     method: "POST",
     headers: {
@@ -327,6 +330,7 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
       likelyHuman: classification.visitorClass === "human" ? true : classification.visitorClass === "bot" ? false : null,
       country: cf?.country ?? null,
       userAgentClass: classification.visitorClass,
+      measurementEligible,
     }),
   });
   if (!internal.ok) return errorResponse(503, "Offer temporarily unavailable");
@@ -351,7 +355,7 @@ async function handleGo(request: Request, snapshot: ReleaseSnapshot, slot: strin
     if (destination.protocol !== "https:") return errorResponse(503, "Offer temporarily unavailable");
     destinationValue = destination.toString();
   }
-  if (!(await isTelemetryExcluded(request, env))) {
+  if (measurementEligible) {
     env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "click", classification, hashedVisitor));
   }
   return withHeaders(Response.redirect(destinationValue, 302), { "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" });
@@ -427,7 +431,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const classification = classifyVisitor(request);
     env.EVENTS.writeDataPoint(eventPoint(request, snapshot, "view", classification, visitor.hash));
     if (classification.visitorClass === "human") {
-      const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"));
+      const marker = await recordQualifiedSession(request, snapshot, env, ((request.cf as CfProperties | undefined)?.country ?? "XX"), visitor.hash);
       if (marker) headers.append("Set-Cookie", marker);
     }
     headers.append("Set-Cookie", `${VISITOR_COOKIE}=${visitor.cookie}; Max-Age=${VISITOR_SESSION_SECONDS}; Path=/; Secure; HttpOnly; SameSite=Lax`);

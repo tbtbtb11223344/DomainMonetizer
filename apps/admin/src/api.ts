@@ -128,6 +128,9 @@ export interface DomainMetricSummary {
   sampled_us_unique_visitors: number;
   sampled_unique_sample_interval: number;
   clicks: number;
+  phone_actions: number;
+  unique_phone_actions: number;
+  provider_confirmed_calls: number;
   max_sample_interval: number;
   unique_sample_interval: number;
 }
@@ -157,6 +160,9 @@ export interface MetricsOverview {
     activeCampaigns: number;
     activeRoutingPolicies: number;
     clicks: number;
+    phoneActions: number;
+    uniquePhoneActions: number;
+    providerConfirmedCalls: number;
     conversions: number;
     postbacks: number;
     failedPostbacks: number;

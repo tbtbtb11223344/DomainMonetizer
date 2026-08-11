@@ -4,6 +4,7 @@ import { parseMarketcallFields, resolveConversionDomain } from "./marketcall";
 
 function selection(overrides: Partial<OfferSelection> = {}): OfferSelection {
   return {
+    campaign_id: null,
     offer_id: "offer_test",
     provider: "marketcall",
     destination_url: "https://tracking.example/offer?source=domain-monetizer",

@@ -165,7 +165,7 @@ describe("analytics rollups", () => {
     const queryBodies = fetchMock.mock.calls.map((call) => String(call[1]?.body));
     expect(queryBodies.filter((body) => body.includes("max(_sample_interval) AS max_sample_interval"))).toHaveLength(7);
     expect(queryBodies.some((body) => body.includes("blob10 AS as_org"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("blob3 AS domain_id") && body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v3'") && body.includes("index1 IN ('qualified_v3:dom_1')") && body.includes("blob3 IN ('dom_1')"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob3 AS domain_id") && body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v4'") && body.includes("index1 IN ('qualified_v4:dom_1:0'") && body.includes("'qualified_v4:dom_1:f'") && body.includes("blob3 = 'dom_1'"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
@@ -202,7 +202,7 @@ describe("analytics rollups", () => {
     await rollupDate(env, "2026-08-05", new Date("2026-08-06T12:00:00.000Z"));
 
     expect(bodies.some((body) => body.includes("count(DISTINCT blob7)") && body.includes("blob1 = 'view'"))).toBe(true);
-    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v3'"))).toBe(false);
+    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v4'"))).toBe(false);
   });
 
   it("clears stale traffic and country rows even when a rerun is empty", async () => {
