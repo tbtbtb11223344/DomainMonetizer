@@ -50,7 +50,36 @@ const accumulatingQualityBlockers = new Set([
   "qualified_session_sampling",
 ]);
 
-export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
+export function rollupCoveragePending({
+  now = new Date(),
+  latestCompletedDate,
+  observedFullDays,
+  expectedFullDays,
+  latestRun,
+}) {
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(String(latestCompletedDate ?? ""))) return false;
+  const observed = Number(observedFullDays);
+  const expected = Number(expectedFullDays);
+  if (!Number.isInteger(observed) || !Number.isInteger(expected) || expected - observed !== 1) return false;
+
+  const graceDeadlineMinutesUtc = 4 * 60 + 27;
+  const currentMinutesUtc = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (currentMinutesUtc >= graceDeadlineMinutesUtc) return false;
+
+  const expectedLatest = new Date(now);
+  expectedLatest.setUTCHours(0, 0, 0, 0);
+  expectedLatest.setUTCDate(expectedLatest.getUTCDate() - 1);
+  if (latestCompletedDate !== expectedLatest.toISOString().slice(0, 10)) return false;
+  if (expected === 1 && observed === 0 && !latestRun) return true;
+  if (latestRun?.status !== "succeeded" || !/^\d{4}-\d{2}-\d{2}$/u.test(String(latestRun.metric_date ?? ""))) return false;
+
+  const nextRunDate = new Date(`${latestRun.metric_date}T00:00:00.000Z`);
+  nextRunDate.setUTCDate(nextRunDate.getUTCDate() + 1);
+  return nextRunDate.toISOString().slice(0, 10) === latestCompletedDate;
+}
+
+export function evidenceContractIssues({ evidenceStatus, reviewBlockers, pendingRollupCoverage = false }) {
   const issues = [];
   if (!evidenceStatuses.has(evidenceStatus)) {
     issues.push(`Unknown evidence status: ${String(evidenceStatus)}`);
@@ -62,6 +91,9 @@ export function evidenceContractIssues({ evidenceStatus, reviewBlockers }) {
   const observationWindowOpen = reviewBlockers.includes("observation_window");
   for (const blocker of reviewBlockers) {
     if (operationalBlockers.has(blocker)) {
+      if (blocker === "rollup_coverage" && pendingRollupCoverage) {
+        continue;
+      }
       if (!(observationWindowOpen && accumulatingQualityBlockers.has(blocker))) {
         issues.push(`Evidence gate reports ${blocker}`);
       }

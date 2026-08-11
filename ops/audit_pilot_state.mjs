@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
+import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision, rollupCoveragePending } from "./pilot_decision.mjs";
 
 function parseEnv(source) {
   const values = {};
@@ -124,6 +124,13 @@ const pilotDomainIds = new Set(domains.map((domain) => domain.id));
 const inventoryByHostname = new Map(domains.map((domain) => [domain.hostname, domain]));
 const healthByHostname = new Map((overview.healthChecks ?? []).map((check) => [check.hostname, check]));
 const issues = [];
+const pendingRollupCoverage = rollupCoveragePending({
+  now: new Date(),
+  latestCompletedDate: overview.latestCompletedDate,
+  observedFullDays: overview.observedFullDays,
+  expectedFullDays: overview.expectedFullDays,
+  latestRun: overview.latestRun,
+});
 if (pilotDomainIds.size !== domains.length || [...pilotDomainIds].some((value) => typeof value !== "string" || !/^dom_[a-f0-9]+$/u.test(value))) {
   issues.push("Pilot inventory returned missing, duplicate, or invalid domain IDs");
 }
@@ -204,6 +211,7 @@ if (unexpectedPublished.length) issues.push(`Unexpected published domains: ${une
 issues.push(...evidenceContractIssues({
   evidenceStatus: overview.evidenceStatus,
   reviewBlockers: overview.reviewBlockers,
+  pendingRollupCoverage,
 }));
 
 if (!overview.currentDaySchedule) {
@@ -253,6 +261,7 @@ const report = {
     decisionGradeDays: overview.decisionGradeDays,
     expectedFullDays: overview.expectedFullDays,
     rollupCoverageComplete: overview.rollupCoverageComplete,
+    pendingScheduledRollup: pendingRollupCoverage,
     evidenceStatus: overview.evidenceStatus,
     reviewBlockers: overview.reviewBlockers,
     totals: overview.totals,
@@ -270,6 +279,7 @@ const report = {
   notes: [
     "This audit uses only protected control-plane reads and /readyz; it does not create visitor views.",
     "observation_window and qualified_sessions are evidence outcomes, not operational failures.",
+    ...(pendingRollupCoverage ? ["The one-day coverage gap is expected before the 04:17 UTC rollup and its ten-minute grace deadline."] : []),
   ],
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision } from "./pilot_decision.mjs";
+import { currentDayCanaryIssues, evidenceContractIssues, pilotDecision, rollupCoveragePending } from "./pilot_decision.mjs";
 
 describe("pilot decision handoff", () => {
   it("prioritizes operational repair over traffic interpretation", () => {
@@ -60,6 +60,39 @@ describe("evidence API contract", () => {
       evidenceStatus: "collecting",
       reviewBlockers: ["observation_window", "tenant_reliability", "telemetry_pipeline", "qualified_session_sampling"],
     })).toEqual([]);
+  });
+
+  it("tolerates only the one expected coverage gap before the daily rollup grace deadline", () => {
+    const pending = rollupCoveragePending({
+      now: new Date("2026-08-11T01:01:00.000Z"),
+      latestCompletedDate: "2026-08-10",
+      observedFullDays: 5,
+      expectedFullDays: 6,
+      latestRun: { status: "succeeded", metric_date: "2026-08-09" },
+    });
+    expect(pending).toBe(true);
+    expect(evidenceContractIssues({
+      evidenceStatus: "collecting",
+      reviewBlockers: ["observation_window", "rollup_coverage"],
+      pendingRollupCoverage: pending,
+    })).toEqual([]);
+  });
+
+  it("fails closed on overdue, multi-day, or previously failed rollup coverage", () => {
+    const base = {
+      latestCompletedDate: "2026-08-10",
+      observedFullDays: 5,
+      expectedFullDays: 6,
+      latestRun: { status: "succeeded", metric_date: "2026-08-09" },
+    };
+    expect(rollupCoveragePending({ ...base, now: new Date("2026-08-11T04:27:00.000Z") })).toBe(false);
+    expect(rollupCoveragePending({ ...base, now: new Date("2026-08-11T01:01:00.000Z"), observedFullDays: 4 })).toBe(false);
+    expect(rollupCoveragePending({ ...base, now: new Date("2026-08-11T01:01:00.000Z"), latestRun: { status: "failed", metric_date: "2026-08-10" } })).toBe(false);
+    expect(evidenceContractIssues({
+      evidenceStatus: "collecting",
+      reviewBlockers: ["observation_window", "rollup_coverage"],
+      pendingRollupCoverage: false,
+    })).toContain("Evidence gate reports rollup_coverage");
   });
 
   it("rejects inconsistent status and blocker combinations", () => {
