@@ -205,6 +205,35 @@ describe("analytics rollups", () => {
     expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v4'"))).toBe(false);
   });
 
+  it("reads v3 US sessions before the v4 decision-grade boundary", async () => {
+    const { db, batches } = fakeDatabase([], [{ domain_id: "dom_1", expected_canaries: "4" }]);
+    const responses = [
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-11", views: "40", engaged_visits: "2", likely_human_views: "20", bot_views: "10", unknown_views: "10", human_engaged_visits: "2", us_likely_human_views: "15", clicks: "0", max_sample_interval: "9" }] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-11", unique_visitors: "22", us_unique_visitors: "8", max_sample_interval: "1" }] },
+      { data: [] },
+      { data: [] },
+      { data: [{ domain_id: "dom_1", metric_date: "2026-08-11", observed_canaries: "4", max_sample_interval: "1" }] },
+      { data: [] },
+      { data: [] },
+    ];
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(String(init?.body));
+      return new Response(JSON.stringify(responses.shift()), { headers: { "Content-Type": "application/json" } });
+    }));
+    const env = { ...environment(db), EXACT_SESSION_MIN_DATE: "2026-08-12" };
+
+    const result = await rollupDate(env, "2026-08-11", new Date("2026-08-12T12:00:00.000Z"));
+
+    expect(result).toMatchObject({ uniqueSampleInterval: 1, telemetryVerified: true });
+    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v3'") && body.includes("index1 = 'qualified_v3:dom_1'") && body.includes("AS us_unique_visitors"))).toBe(true);
+    expect(bodies.some((body) => body.includes("blob1 = 'qualified_session_v4'"))).toBe(false);
+    const domainInsert = batches[0]!.find((statement) => statement.sql.startsWith("INSERT INTO daily_domain_metrics"));
+    expect(domainInsert?.sql).toContain("telemetry_version, updated_at) VALUES");
+    expect(domainInsert?.sql).toContain("3, ?)");
+    expect(domainInsert?.args).toEqual(expect.arrayContaining(["dom_1", "2026-08-11", 22, 8]));
+  });
+
   it("clears stale traffic and country rows even when a rerun is empty", async () => {
     const { db, batches } = fakeDatabase();
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { headers: { "Content-Type": "application/json" } })));

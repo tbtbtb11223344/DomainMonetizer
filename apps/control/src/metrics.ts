@@ -109,6 +109,9 @@ const AUTOMATIC_ROLLUP_LIMIT = 5;
 const EXACT_SESSION_EVENT = "qualified_session_v4";
 const EXACT_SESSION_INDEX_PREFIX = "qualified_v4:";
 const EXACT_SESSION_SHARDS = "0123456789abcdef".split("");
+const V3_SESSION_EVENT = "qualified_session_v3";
+const V3_SESSION_INDEX_PREFIX = "qualified_v3:";
+const V3_SESSION_MIN_DATE = "2026-08-10";
 
 function utcDate(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -229,7 +232,11 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
   const end = `${utcDate(endDate)} 00:00:00`;
   const preview = env.PREVIEW_HOSTNAME?.trim().toLowerCase() || "preview.invalid";
   const where = `timestamp >= toDateTime(${sqlString(start)}) AND timestamp < toDateTime(${sqlString(end)}) AND blob2 != ${sqlString(preview)}`;
-  const useExactSessionStream = Boolean(env.EXACT_SESSION_MIN_DATE && metricDate >= env.EXACT_SESSION_MIN_DATE);
+  // Stream selection and decision-grade eligibility are deliberately separate.
+  // v3 remains the truthful source for its two completed UTC days even though
+  // only v4 dates at/after EXACT_SESSION_MIN_DATE can become decision-grade.
+  const useV4SessionStream = Boolean(env.EXACT_SESSION_MIN_DATE && metricDate >= env.EXACT_SESSION_MIN_DATE);
+  const useV3SessionStream = !useV4SessionStream && metricDate >= V3_SESSION_MIN_DATE;
 
   try {
     const expectedRows = await env.DB.prepare(
@@ -238,7 +245,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
     const publishedDomainIds = expectedRows.results.map((row) => row.domain_id);
     if (publishedDomainIds.some((domainId) => !/^dom_[a-f0-9]+$/.test(domainId))) throw new Error("Published domain ID is invalid");
     const metricsSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'bot') AS bot_views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'unknown') AS unknown_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human' AND blob5 = 'US') AS us_likely_human_views, sumIf(_sample_interval * double1, blob1 = 'click') AS clicks, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged', 'click') GROUP BY index1, metric_date`;
-    const queryUniqueRows = () => useExactSessionStream
+    const queryUniqueRows = () => useV4SessionStream
       ? publishedDomainIds.length
         ? Promise.all(publishedDomainIds.map((domainId) => {
           const shardIndexes = EXACT_SESSION_SHARDS.map((shard) => `${EXACT_SESSION_INDEX_PREFIX}${domainId}:${shard}`);
@@ -248,7 +255,14 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
           );
         })).then((rows) => rows.flat())
         : Promise.resolve([])
-      : queryAnalytics<UniqueRow>(env, `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`);
+      : useV3SessionStream
+        ? publishedDomainIds.length
+          ? Promise.all(publishedDomainIds.map((domainId) => queryAnalytics<UniqueRow>(
+            env,
+            `SELECT blob3 AS domain_id, toDate(timestamp) AS metric_date, sum(_sample_interval * double1) AS unique_visitors, sumIf(_sample_interval * double1, blob5 = 'US') AS us_unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = ${sqlString(V3_SESSION_EVENT)} AND index1 = ${sqlString(`${V3_SESSION_INDEX_PREFIX}${domainId}`)} AND blob3 = ${sqlString(domainId)} GROUP BY blob3, metric_date`,
+          ))).then((rows) => rows.flat())
+          : Promise.resolve([])
+        : queryAnalytics<UniqueRow>(env, `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS unique_visitors, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'view' AND blob4 = 'human' AND blob7 != '' GROUP BY index1, metric_date`);
     const countriesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob5 AS country, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'view' AND blob4 = 'human') AS likely_human_views, sumIf(_sample_interval * double1, blob1 = 'engaged' AND blob4 = 'human') AS human_engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, country`;
     const sourcesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, blob4 AS visitor_class, blob8 AS classification_reason, blob5 AS country, blob9 AS asn, blob10 AS as_org, sumIf(_sample_interval * double1, blob1 = 'view') AS views, sumIf(_sample_interval * double1, blob1 = 'engaged') AS engaged_visits, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob7 != '' AND blob1 IN ('view', 'engaged') GROUP BY index1, metric_date, visitor_class, classification_reason, country, asn, as_org`;
     const canariesSql = `SELECT index1 AS domain_id, toDate(timestamp) AS metric_date, count(DISTINCT blob7) AS observed_canaries, max(_sample_interval) AS max_sample_interval FROM ${env.ANALYTICS_DATASET} WHERE ${where} AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != '' GROUP BY index1, metric_date`;
@@ -284,7 +298,7 @@ export async function rollupDate(env: Env, metricDate: string, now = new Date())
       const expected = expectedByDomain.get(domainId) ?? 0;
       return expected > 0 && observedByDomain.get(domainId) === expected && (canarySampleByDomain.get(domainId) ?? 1) === 1;
     });
-    const telemetryVersion = useExactSessionStream ? 4 : 2;
+    const telemetryVersion = useV4SessionStream ? 4 : useV3SessionStream ? 3 : 2;
     const timestamp = nowIso();
     const statements: D1PreparedStatement[] = [
       env.DB.prepare(`UPDATE daily_domain_metrics SET views=0, engaged_visits=0, likely_human_views=0, clicks=0, bot_views=0, unknown_views=0, human_engaged_visits=0, us_likely_human_views=0, unique_visitors=0, us_unique_visitors=0, max_sample_interval=1, unique_sample_interval=1, telemetry_version=${telemetryVersion}, updated_at=? WHERE metric_date=?`)
