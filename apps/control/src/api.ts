@@ -16,6 +16,19 @@ import {
 } from "@domain-monetizer/core";
 import { Hono } from "hono";
 import { z } from "zod";
+import {
+  analyticsBounds,
+  analyticsClickAggregationSql,
+  analyticsRunSelectionSql,
+  buildAnalyticsResponse,
+  parseAnalyticsRange,
+  type AnalyticsClickRow,
+  type AnalyticsConversionRow,
+  type AnalyticsDomainRow,
+  type AnalyticsHealthRow,
+  type AnalyticsMetricRow,
+  type AnalyticsRunRow,
+} from "./analytics";
 import { auditStatement, nextVersion, nowIso } from "./db";
 import { decideEvidence } from "./evidence";
 import { checkPublishedTenants, SCHEDULED_HEALTH_CHECKS_PER_DAY, summarizeCurrentDaySchedule, summarizeTenantHealth, type HealthPortfolioDomain, type LatestTenantHealthRow, type ScheduledTenantHealthRow } from "./health";
@@ -220,6 +233,54 @@ export function mountApi(app: App): void {
     const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
     const result = await c.env.DB.prepare(`SELECT * FROM domains${where} ORDER BY COALESCE(traffic_30d_visitors, 0) DESC, hostname ASC LIMIT ?`).bind(...values, limit).all<DomainRow>();
     return c.json({ domains: result.results.map(publicDomain) });
+  });
+
+  app.get("/api/metrics/timeseries", async (c) => {
+    const range = parseAnalyticsRange(c.req.query("range"));
+    if (!range) return c.json({ error: "Range must be one of 7d, 30d, or all" }, 400);
+    const selectedDomainId = (c.req.query("domainId") ?? "").trim() || null;
+    const telemetryStartDate = c.env.TELEMETRY_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.TELEMETRY_MIN_DATE)
+      ? c.env.TELEMETRY_MIN_DATE
+      : new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const exactSessionStartDate = c.env.EXACT_SESSION_MIN_DATE && /^\d{4}-\d{2}-\d{2}$/.test(c.env.EXACT_SESSION_MIN_DATE)
+      ? c.env.EXACT_SESSION_MIN_DATE
+      : telemetryStartDate;
+    const latestCompletedDate = latestCompletedUtcDate(new Date());
+    const bounds = analyticsBounds(range, telemetryStartDate, latestCompletedDate);
+    const domainResult = await c.env.DB.prepare("SELECT id,hostname,measurement_started_at FROM domains WHERE measurement_started_at IS NOT NULL ORDER BY hostname").all<AnalyticsDomainRow>();
+    if (selectedDomainId && !domainResult.results.some((domain) => domain.id === selectedDomainId)) {
+      return c.json({ error: "Measured domain not found" }, 404);
+    }
+    const queryStart = bounds.previous?.start ?? bounds.current.start;
+    const queryEndExclusive = new Date(`${bounds.current.end}T00:00:00.000Z`);
+    queryEndExclusive.setUTCDate(queryEndExclusive.getUTCDate() + 1);
+    const domainClause = selectedDomainId ? " AND domain_id=?" : "";
+    const metricDomainClause = selectedDomainId ? " AND m.domain_id=?" : "";
+    const conversionDomainClause = selectedDomainId ? " AND domain_id=?" : "";
+    const [metrics, runs, health, clicks, conversions] = await Promise.all([
+      c.env.DB.prepare(`SELECT m.domain_id,m.metric_date,m.us_unique_visitors,m.unique_sample_interval,m.telemetry_version FROM daily_domain_metrics m JOIN domains d ON d.id=m.domain_id WHERE d.measurement_started_at IS NOT NULL AND m.metric_date>=? AND m.metric_date<=?${metricDomainClause} ORDER BY m.metric_date,m.domain_id`)
+        .bind(queryStart, bounds.current.end, ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsMetricRow>(),
+      c.env.DB.prepare(analyticsRunSelectionSql())
+        .bind(queryStart, bounds.current.end).all<AnalyticsRunRow>(),
+      c.env.DB.prepare(`SELECT domain_id,metric_date,verified FROM daily_domain_telemetry_health WHERE metric_date>=? AND metric_date<=?${domainClause} ORDER BY metric_date,domain_id`)
+        .bind(queryStart, bounds.current.end, ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsHealthRow>(),
+      c.env.DB.prepare(analyticsClickAggregationSql(Boolean(selectedDomainId)))
+        .bind(`${queryStart}T00:00:00.000Z`, queryEndExclusive.toISOString(), ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsClickRow>(),
+      c.env.DB.prepare(`SELECT domain_id,substr(COALESCE(occurred_at,received_at),1,10) AS metric_date,COUNT(*) AS confirmed_calls FROM conversions WHERE status='accepted' AND COALESCE(occurred_at,received_at)>=? AND COALESCE(occurred_at,received_at)<?${conversionDomainClause} GROUP BY domain_id,substr(COALESCE(occurred_at,received_at),1,10) ORDER BY metric_date,domain_id`)
+        .bind(`${queryStart}T00:00:00.000Z`, queryEndExclusive.toISOString(), ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsConversionRow>(),
+    ]);
+    return c.json(buildAnalyticsResponse({
+      range,
+      bounds,
+      exactSessionStartDate,
+      selectedDomainId,
+      domains: domainResult.results,
+      metrics: metrics.results,
+      runs: runs.results,
+      health: health.results,
+      clicks: clicks.results,
+      conversions: conversions.results,
+    }));
   });
 
   app.get("/api/metrics/overview", async (c) => {

@@ -1,13 +1,14 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { AnalyticsView } from "./AnalyticsView";
 import { getDomain, getMetricsOverview, listAuditEvents, listCohorts, listDomains, listJobs, mutate, type AuditEvent, type CohortSummary, type DomainDetail, type DomainSummary, type JobSummary, type MetricsOverview } from "./api";
 import "./styles.css";
 
-type View = "portfolio" | "jobs" | "audit";
+type View = "analytics" | "portfolio" | "jobs" | "audit";
 
 function initialView(): View {
   const hash = window.location.hash.slice(1);
-  return hash === "jobs" || hash === "audit" ? hash : "portfolio";
+  return hash === "portfolio" || hash === "jobs" || hash === "audit" ? hash : "analytics";
 }
 
 const statusLabels: Record<DomainSummary["lifecycleStatus"], string> = {
@@ -95,8 +96,8 @@ function App() {
     }
   }, [selected]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => { void listCohorts().then(setCohorts).catch(() => undefined); }, []);
+  useEffect(() => { if (view === "portfolio") void refresh(); }, [refresh, view]);
+  useEffect(() => { if (view === "portfolio") void listCohorts().then(setCohorts).catch(() => undefined); }, [view]);
   useEffect(() => { void refreshDetail(); }, [refreshDetail]);
   useEffect(() => {
     const syncViewFromHash = () => setView(initialView());
@@ -104,7 +105,7 @@ function App() {
     return () => window.removeEventListener("hashchange", syncViewFromHash);
   }, []);
   useEffect(() => {
-    if (view === "portfolio") return;
+    if (view === "portfolio" || view === "analytics") return;
     setAuxiliaryLoading(true);
     const pending = view === "jobs" ? listJobs() : listAuditEvents();
     void pending.then((result) => {
@@ -127,7 +128,7 @@ function App() {
     running: jobs.filter((job) => job.status === "running").length,
     failed: jobs.filter((job) => job.status === "failed").length,
   }), [jobs]);
-  const pageTitle = view === "portfolio" ? "Portfolio control" : view === "jobs" ? "Generation jobs" : "Audit trail";
+  const pageTitle = view === "analytics" ? "Analytics" : view === "portfolio" ? "Portfolio control" : view === "jobs" ? "Generation jobs" : "Audit trail";
 
   const reloadAuxiliary = async () => {
     setAuxiliaryLoading(true);
@@ -199,9 +200,10 @@ function App() {
     <aside className="rail">
       <div className="mark">DM</div>
       <nav aria-label="Primary">
-        <a className={view === "portfolio" ? "active" : ""} href="#portfolio" onClick={() => setView("portfolio")}><span>01</span> Portfolio</a>
-        <a className={view === "jobs" ? "active" : ""} href="#jobs" onClick={() => setView("jobs")}><span>02</span> Jobs</a>
-        <a className={view === "audit" ? "active" : ""} href="#audit" onClick={() => setView("audit")}><span>03</span> Audit</a>
+        <a className={view === "analytics" ? "active" : ""} href="#analytics" onClick={() => setView("analytics")}><span>01</span> Analytics</a>
+        <a className={view === "portfolio" ? "active" : ""} href="#portfolio" onClick={() => setView("portfolio")}><span>02</span> Portfolio</a>
+        <a className={view === "jobs" ? "active" : ""} href="#jobs" onClick={() => setView("jobs")}><span>03</span> Jobs</a>
+        <a className={view === "audit" ? "active" : ""} href="#audit" onClick={() => setView("audit")}><span>04</span> Audit</a>
       </nav>
       <div className="rail-foot"><span className="pulse" /> Control plane</div>
     </aside>
@@ -213,7 +215,8 @@ function App() {
         {view === "audit" && <div className="summary"><div><strong>{auditEvents.length}</strong><span>recent events</span></div><div className="summary-wide"><strong>{auditEvents[0] ? formatTimestamp(auditEvents[0].occurred_at) : "—"}</strong><span>latest mutation</span></div></div>}
       </header>
 
-      {error && <div className="error" role="alert"><span>Attention</span>{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
+      {view !== "analytics" && error && <div className="error" role="alert"><span>Attention</span>{error}<button onClick={() => setError(null)}>Dismiss</button></div>}
+      {view === "analytics" && <AnalyticsView />}
       {view === "portfolio" && <>
       {overview && exactUniqueKpiPending && <div className="info" role="status"><span>U.S. unique KPI</span>{sampledEstimateAvailable ? `Showing the latest completed-day results from ${overview.sampledMetricDate}; domains marked ≈ are sampling-adjusted (maximum ×${overview.totals.sampledUniqueSampleInterval}). ` : ""}The new exact daily stream starts {overview.exactSessionStartDate} UTC. Earlier results remain visible but are excluded from decision-grade evidence.</div>}
       {overview?.latestRun?.status === "failed" && <div className="error" role="alert"><span>Telemetry</span>Latest daily rollup failed for {overview.latestRun.metric_date}: {overview.latestRun.error_message ?? "No diagnostic was recorded."}</div>}

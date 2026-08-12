@@ -182,6 +182,69 @@ export interface MetricsOverview {
   latestRun: { metric_date: string; status: string; expected_canaries: number; observed_canaries: number; canary_sample_interval: number; telemetry_verified: number; error_message: string | null; completed_at: string | null } | null;
 }
 
+export type AnalyticsRange = "7d" | "30d" | "all";
+
+export interface AnalyticsPoint {
+  date: string;
+  usQualifiedVisitors: number | null;
+  uniqueCallClickers: number;
+  totalCallClicks: number;
+  providerConfirmedCalls: number;
+  unattributedConfirmedCalls: number;
+  visitorQuality: "exact" | "estimated" | "unavailable";
+  visitorQualityReason: "exact" | "legacy" | "sampled" | "rollup_unavailable" | "not_measured";
+  sampleInterval: number;
+  telemetryVerified: boolean;
+}
+
+export interface AnalyticsSummary {
+  usQualifiedVisitors: number;
+  uniqueCallClickers: number;
+  totalCallClicks: number;
+  providerConfirmedCalls: number;
+  unattributedConfirmedCalls: number;
+  intentRate: number | null;
+  approximate: boolean;
+  coverageComplete: boolean;
+  exactDays: number;
+  estimatedDays: number;
+  unavailableDays: number;
+}
+
+export interface AnalyticsComparison {
+  label: string;
+  usQualifiedVisitorsChange: number | null;
+  uniqueCallClickersChange: number | null;
+  totalCallClicksChange: number | null;
+  intentRateChange: number | null;
+}
+
+export interface AnalyticsRanking {
+  domainId: string;
+  hostname: string;
+  usQualifiedVisitors: number;
+  uniqueCallClickers: number;
+  totalCallClicks: number;
+  providerConfirmedCalls: number;
+  intentRate: number | null;
+  approximate: boolean;
+  coverageComplete: boolean;
+}
+
+export interface AnalyticsTimeseries {
+  range: AnalyticsRange;
+  scope: { domainId: string | null; hostname: string | null };
+  timezone: "UTC";
+  from: string;
+  through: string;
+  exactSessionStartDate: string;
+  availableDomains: Array<{ id: string; hostname: string }>;
+  points: AnalyticsPoint[];
+  summary: AnalyticsSummary;
+  comparison: AnalyticsComparison | null;
+  rankings: AnalyticsRanking[];
+}
+
 export interface TelemetryHealthDay {
   metric_date: string;
   expected_canaries: number;
@@ -264,6 +327,12 @@ export async function getDomain(hostname: string): Promise<DomainDetail> {
 
 export async function getMetricsOverview(cohort = ""): Promise<MetricsOverview> {
   return request(`/api/metrics/overview${cohort ? `?cohort=${encodeURIComponent(cohort)}` : ""}`);
+}
+
+export async function getAnalyticsTimeseries(range: AnalyticsRange, domainId = ""): Promise<AnalyticsTimeseries> {
+  const query = new URLSearchParams({ range });
+  if (domainId) query.set("domainId", domainId);
+  return request(`/api/metrics/timeseries?${query.toString()}`);
 }
 
 export async function listCohorts(): Promise<CohortSummary[]> {
