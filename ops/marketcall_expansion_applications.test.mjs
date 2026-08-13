@@ -31,15 +31,23 @@ describe("Marketcall expansion applications", () => {
     expect(applications.activationReady).toBe(false);
     expect(applications.activationBlocker).toBe("provider_campaign_and_material_moderation");
 
+    const campaignStates = new Set();
+    const materialStates = new Set();
+
     for (const campaign of applications.campaigns) {
-      expect(campaign.campaignState).toBe("moderation");
+      expect(["approved", "moderation"]).toContain(campaign.campaignState);
+      campaignStates.add(campaign.campaignState);
       expect(campaign.didStatus).toBe("approved");
       expect(campaign.trafficSources).toEqual(["SEO"]);
       expect(campaign.did).toMatch(/^\+1\d{10}$/);
       for (const material of campaign.materials) {
-        expect(material.materialState).toBe("manager_moderation");
+        expect(["accepted", "manager_moderation", "merchant_moderation"]).toContain(material.materialState);
+        materialStates.add(material.materialState);
       }
     }
+
+    expect(campaignStates).toContain("moderation");
+    expect(materialStates.has("manager_moderation") || materialStates.has("merchant_moderation")).toBe(true);
   });
 
   it("does not add pending expansion websites to the active pilot contract", () => {

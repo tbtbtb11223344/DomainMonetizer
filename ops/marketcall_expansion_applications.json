@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-08-12T13:43:00.6505262Z",
+  "asOf": "2026-08-13T01:38:28.9734489Z",
   "provider": "marketcall",
   "activationReady": false,
   "activationBlocker": "provider_campaign_and_material_moderation",
@@ -9,7 +9,7 @@
       "offerTitle": "Kitchen Remodeling Bundle| Inbounds | Dynamic | Pre-Approval",
       "campaignId": "351286",
       "campaignTitle": "accentpwp.com SEO",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18662275749",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -18,7 +18,7 @@
           "hostname": "accentpwp.com",
           "materialId": "91770",
           "materialTitle": "accentpwp.com cabinetry guide",
-          "materialState": "manager_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -36,7 +36,7 @@
           "hostname": "americraftsw.com",
           "materialId": "91803",
           "materialTitle": "americraftsw.com siding guide",
-          "materialState": "manager_moderation"
+          "materialState": "merchant_moderation"
         }
       ]
     },
@@ -45,7 +45,7 @@
       "offerTitle": "Windows Bundle | Inbounds | Dynamic | Pre-Approval",
       "campaignId": "351331",
       "campaignTitle": "homespirewindows.com SEO",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18448330738",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -54,7 +54,7 @@
           "hostname": "homespirewindows.com",
           "materialId": "91804",
           "materialTitle": "homespirewindows.com replacement-window guide",
-          "materialState": "manager_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -72,7 +72,7 @@
           "hostname": "sniperpestcontrol.net",
           "materialId": "91805",
           "materialTitle": "sniperpestcontrol.net pest-control guide",
-          "materialState": "manager_moderation"
+          "materialState": "merchant_moderation"
         }
       ]
     },
@@ -81,7 +81,7 @@
       "offerTitle": "Flooring Bundle | Inbounds | Dynamic | Pre- Approval",
       "campaignId": "351334",
       "campaignTitle": "Flooring SEO | piedmontfloor.com + marbleshooters.net",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18442129585",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -90,7 +90,7 @@
           "hostname": "piedmontfloor.com",
           "materialId": "91806",
           "materialTitle": "piedmontfloor.com flooring guide",
-          "materialState": "manager_moderation"
+          "materialState": "accepted"
         },
         {
           "hostname": "marbleshooters.net",
@@ -123,7 +123,7 @@
       "offerTitle": "Garage Door Bundle | Inbounds | Dynamic | Pre- Approval",
       "campaignId": "351336",
       "campaignTitle": "a-1garagedoorsportland.com SEO",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18446650793",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -132,7 +132,7 @@
           "hostname": "a-1garagedoorsportland.com",
           "materialId": "91809",
           "materialTitle": "a-1garagedoorsportland.com garage-door guide",
-          "materialState": "manager_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -150,7 +150,7 @@
           "hostname": "adamsfoundationrepair.com",
           "materialId": "91810",
           "materialTitle": "adamsfoundationrepair.com new-foundation guide",
-          "materialState": "manager_moderation",
+          "materialState": "merchant_moderation",
           "scope": "new concrete or foundation construction only; repair and waterproofing calls excluded"
         }
       ]
