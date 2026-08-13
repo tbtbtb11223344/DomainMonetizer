@@ -26,7 +26,7 @@ describe("Marketcall expansion applications", () => {
     expect(new Set(hostnames).size).toBe(hostnames.length);
   });
 
-  it("keeps provider-moderated applications dormant", () => {
+  it("keeps the incomplete provider application batch dormant", () => {
     expect(applications.provider).toBe("marketcall");
     expect(applications.activationReady).toBe(false);
     expect(applications.activationBlocker).toBe("provider_campaign_and_material_moderation");
@@ -46,7 +46,7 @@ describe("Marketcall expansion applications", () => {
       }
     }
 
-    expect(campaignStates).toContain("moderation");
+    expect(campaignStates).toEqual(new Set(["approved"]));
     expect(materialStates.has("manager_moderation") || materialStates.has("merchant_moderation")).toBe(true);
   });
 

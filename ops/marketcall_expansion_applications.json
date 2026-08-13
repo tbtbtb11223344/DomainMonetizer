@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-08-13T01:38:28.9734489Z",
+  "asOf": "2026-08-13T13:32:56.6452455Z",
   "provider": "marketcall",
   "activationReady": false,
   "activationBlocker": "provider_campaign_and_material_moderation",
@@ -27,7 +27,7 @@
       "offerTitle": "Siding Bundle | Inbounds | Dynamic | Pre- Approval",
       "campaignId": "351330",
       "campaignTitle": "americraftsw.com SEO",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18445950263",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -36,7 +36,7 @@
           "hostname": "americraftsw.com",
           "materialId": "91803",
           "materialTitle": "americraftsw.com siding guide",
-          "materialState": "merchant_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -63,7 +63,7 @@
       "offerTitle": "Pest Control & Wildlife Removal Bundle | Inbounds | Dynamic | Pre- Approval",
       "campaignId": "351333",
       "campaignTitle": "sniperpestcontrol.net SEO",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18445782934",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -72,7 +72,7 @@
           "hostname": "sniperpestcontrol.net",
           "materialId": "91805",
           "materialTitle": "sniperpestcontrol.net pest-control guide",
-          "materialState": "merchant_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -105,7 +105,7 @@
       "offerTitle": "Tree Removal Bundle | Inbounds | Dynamic | Pre- Approval",
       "campaignId": "351335",
       "campaignTitle": "361treeandlandscape.com SEO | Tree Removal",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18445782997",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -114,7 +114,7 @@
           "hostname": "361treeandlandscape.com",
           "materialId": "91808",
           "materialTitle": "361treeandlandscape.com tree-removal guide",
-          "materialState": "manager_moderation"
+          "materialState": "accepted"
         }
       ]
     },
@@ -141,7 +141,7 @@
       "offerTitle": "Concrete Service Bundle | Inbounds | Dynamic | Pre-Approval",
       "campaignId": "351337",
       "campaignTitle": "adamsfoundationrepair.com SEO | New Concrete Only",
-      "campaignState": "moderation",
+      "campaignState": "approved",
       "did": "+18442753606",
       "didStatus": "approved",
       "trafficSources": ["SEO"],
@@ -150,7 +150,7 @@
           "hostname": "adamsfoundationrepair.com",
           "materialId": "91810",
           "materialTitle": "adamsfoundationrepair.com new-foundation guide",
-          "materialState": "merchant_moderation",
+          "materialState": "accepted",
           "scope": "new concrete or foundation construction only; repair and waterproofing calls excluded"
         }
       ]
