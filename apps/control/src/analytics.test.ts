@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyticsBounds, analyticsClickAggregationSql, analyticsRunSelectionSql, buildAnalyticsResponse, parseAnalyticsRange, type BuildAnalyticsInput } from "./analytics";
+import { analyticsBounds, analyticsRunSelectionSql, buildAnalyticsResponse, parseAnalyticsRange, type BuildAnalyticsInput } from "./analytics";
 
 const domains = [
   { id: "dom_a", hostname: "alpha.example", measurement_started_at: "2026-08-01T00:00:00.000Z" },
@@ -27,13 +27,11 @@ function input(overrides: Partial<BuildAnalyticsInput> = {}): BuildAnalyticsInpu
       { domain_id: "dom_a", metric_date: "2026-08-12", verified: 1 },
       { domain_id: "dom_b", metric_date: "2026-08-12", verified: 1 },
     ],
-    clicks: [
-      { domain_id: "dom_a", metric_date: "2026-08-11", unique_call_clickers: 2, total_call_clicks: 3 },
-      { domain_id: "dom_b", metric_date: "2026-08-12", unique_call_clickers: 1, total_call_clicks: 2 },
-    ],
     conversions: [
-      { domain_id: "dom_a", metric_date: "2026-08-12", confirmed_calls: 1 },
-      { domain_id: null, metric_date: "2026-08-12", confirmed_calls: 1 },
+      { domain_id: "dom_a", metric_date: "2026-08-11", provider_recorded_calls: 2, qualified_calls: 1, pending_calls: 0, unsuccessful_calls: 1 },
+      { domain_id: "dom_a", metric_date: "2026-08-12", provider_recorded_calls: 1, qualified_calls: 1, pending_calls: 0, unsuccessful_calls: 0 },
+      { domain_id: "dom_b", metric_date: "2026-08-12", provider_recorded_calls: 1, qualified_calls: 0, pending_calls: 1, unsuccessful_calls: 0 },
+      { domain_id: null, metric_date: "2026-08-12", provider_recorded_calls: 1, qualified_calls: 0, pending_calls: 0, unsuccessful_calls: 1 },
     ],
     ...overrides,
   };
@@ -59,15 +57,6 @@ describe("analytics range contract", () => {
     });
   });
 
-  it("deduplicates only measurement-eligible likely-human U.S. phone actions", () => {
-    const sql = analyticsClickAggregationSql(true);
-    expect(sql).toContain("action_type='phone'");
-    expect(sql).toContain("measurement_eligible=1");
-    expect(sql).toContain("country='US'");
-    expect(sql).toContain("COUNT(DISTINCT CASE WHEN likely_human=1 THEN COALESCE(visitor_id_hash,id) END)");
-    expect(sql).toContain("AND domain_id=?");
-  });
-
   it("treats the latest failed retry as unavailable instead of reviving an older success", () => {
     const sql = analyticsRunSelectionSql();
     const latestRunSubquery = sql.slice(sql.indexOf("JOIN ("), sql.indexOf(") latest"));
@@ -87,16 +76,17 @@ describe("analytics response", () => {
     ]);
     expect(response.summary).toMatchObject({
       usQualifiedVisitors: 18,
-      uniqueCallClickers: 3,
-      totalCallClicks: 5,
-      providerConfirmedCalls: 2,
-      unattributedConfirmedCalls: 1,
+      providerRecordedCalls: 5,
+      qualifiedCalls: 2,
+      pendingCalls: 1,
+      unsuccessfulCalls: 2,
+      unattributedProviderRecordedCalls: 1,
+      unattributedQualifiedCalls: 0,
       approximate: true,
       coverageComplete: false,
       exactDays: 1,
       estimatedDays: 1,
       unavailableDays: 1,
-      intentRate: null,
     });
   });
 
@@ -106,19 +96,20 @@ describe("analytics response", () => {
     expect(response.scope).toEqual({ domainId: "dom_b", hostname: "beta.example" });
     expect(response.rankings).toEqual([]);
     expect(response.points[0]).toMatchObject({ visitorQuality: "unavailable", visitorQualityReason: "not_measured" });
-    expect(response.points[1]).toMatchObject({ usQualifiedVisitors: 3, uniqueCallClickers: 1, totalCallClicks: 2, providerConfirmedCalls: 0, telemetryVerified: true });
-    expect(response.summary.unattributedConfirmedCalls).toBe(0);
+    expect(response.points[1]).toMatchObject({ usQualifiedVisitors: 3, providerRecordedCalls: 1, qualifiedCalls: 0, pendingCalls: 1, unsuccessfulCalls: 0, telemetryVerified: true });
+    expect(response.summary.unattributedProviderRecordedCalls).toBe(0);
   });
 
   it("ranks every measured domain and keeps unattributed calls out of rows", () => {
     const response = buildAnalyticsResponse(input({ bounds: { current: { start: "2026-08-12", end: "2026-08-12" }, previous: null } }));
 
-    expect(response.rankings.map((row) => [row.hostname, row.usQualifiedVisitors, row.providerConfirmedCalls])).toEqual([
-      ["alpha.example", 5, 1],
-      ["beta.example", 3, 0],
+    expect(response.rankings.map((row) => [row.hostname, row.usQualifiedVisitors, row.providerRecordedCalls, row.qualifiedCalls])).toEqual([
+      ["alpha.example", 5, 1, 1],
+      ["beta.example", 3, 1, 0],
     ]);
-    expect(response.summary.providerConfirmedCalls).toBe(2);
-    expect(response.summary.unattributedConfirmedCalls).toBe(1);
+    expect(response.summary.providerRecordedCalls).toBe(3);
+    expect(response.summary.qualifiedCalls).toBe(1);
+    expect(response.summary.unattributedProviderRecordedCalls).toBe(1);
   });
 
   it("suppresses visitor comparisons across mixed measurement semantics", () => {
@@ -128,8 +119,8 @@ describe("analytics response", () => {
 
     expect(response.comparison).toMatchObject({
       usQualifiedVisitorsChange: null,
-      intentRateChange: null,
-      uniqueCallClickersChange: -50,
+      providerRecordedCallsChange: 50,
+      qualifiedCallsChange: 0,
     });
   });
 });

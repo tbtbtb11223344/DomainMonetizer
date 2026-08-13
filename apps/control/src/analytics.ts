@@ -35,26 +35,24 @@ export interface AnalyticsHealthRow {
   verified: number | string;
 }
 
-export interface AnalyticsClickRow {
-  domain_id: string;
-  metric_date: string;
-  unique_call_clickers: number | string;
-  total_call_clicks: number | string;
-}
-
 export interface AnalyticsConversionRow {
   domain_id: string | null;
   metric_date: string;
-  confirmed_calls: number | string;
+  provider_recorded_calls: number | string;
+  qualified_calls: number | string;
+  pending_calls: number | string;
+  unsuccessful_calls: number | string;
 }
 
 export interface AnalyticsPoint {
   date: string;
   usQualifiedVisitors: number | null;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  unattributedConfirmedCalls: number;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
+  unattributedProviderRecordedCalls: number;
+  unattributedQualifiedCalls: number;
   visitorQuality: VisitorQuality;
   visitorQualityReason: VisitorQualityReason;
   sampleInterval: number;
@@ -63,11 +61,12 @@ export interface AnalyticsPoint {
 
 export interface AnalyticsSummary {
   usQualifiedVisitors: number;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  unattributedConfirmedCalls: number;
-  intentRate: number | null;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
+  unattributedProviderRecordedCalls: number;
+  unattributedQualifiedCalls: number;
   approximate: boolean;
   coverageComplete: boolean;
   exactDays: number;
@@ -78,19 +77,18 @@ export interface AnalyticsSummary {
 export interface AnalyticsComparison {
   label: string;
   usQualifiedVisitorsChange: number | null;
-  uniqueCallClickersChange: number | null;
-  totalCallClicksChange: number | null;
-  intentRateChange: number | null;
+  providerRecordedCallsChange: number | null;
+  qualifiedCallsChange: number | null;
 }
 
 export interface AnalyticsRanking {
   domainId: string;
   hostname: string;
   usQualifiedVisitors: number;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  intentRate: number | null;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
   approximate: boolean;
   coverageComplete: boolean;
 }
@@ -118,7 +116,6 @@ export interface BuildAnalyticsInput {
   metrics: AnalyticsMetricRow[];
   runs: AnalyticsRunRow[];
   health: AnalyticsHealthRow[];
-  clicks: AnalyticsClickRow[];
   conversions: AnalyticsConversionRow[];
 }
 
@@ -154,10 +151,6 @@ export function parseAnalyticsRange(value: string | undefined): AnalyticsRange |
   return value === "7d" || value === "30d" || value === "all" ? value : null;
 }
 
-export function analyticsClickAggregationSql(domainScoped: boolean): string {
-  return `SELECT domain_id,substr(occurred_at,1,10) AS metric_date,COUNT(*) AS total_call_clicks,COUNT(DISTINCT CASE WHEN likely_human=1 THEN COALESCE(visitor_id_hash,id) END) AS unique_call_clickers FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND country='US' AND occurred_at>=? AND occurred_at<?${domainScoped ? " AND domain_id=?" : ""} GROUP BY domain_id,substr(occurred_at,1,10) ORDER BY metric_date,domain_id`;
-}
-
 export function analyticsRunSelectionSql(): string {
   return "SELECT r.metric_date,r.unique_sample_interval,r.telemetry_verified FROM analytics_rollup_runs r JOIN (SELECT metric_date,MAX(started_at) AS started_at FROM analytics_rollup_runs WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date) latest ON latest.metric_date=r.metric_date AND latest.started_at=r.started_at WHERE r.status='succeeded' ORDER BY r.metric_date";
 }
@@ -186,21 +179,24 @@ function percentChange(current: number | null, previous: number | null): number 
 
 function summarize(points: AnalyticsPoint[]): AnalyticsSummary {
   const usQualifiedVisitors = points.reduce((sum, point) => sum + (point.usQualifiedVisitors ?? 0), 0);
-  const uniqueCallClickers = points.reduce((sum, point) => sum + point.uniqueCallClickers, 0);
-  const totalCallClicks = points.reduce((sum, point) => sum + point.totalCallClicks, 0);
-  const providerConfirmedCalls = points.reduce((sum, point) => sum + point.providerConfirmedCalls, 0);
-  const unattributedConfirmedCalls = points.reduce((sum, point) => sum + point.unattributedConfirmedCalls, 0);
+  const providerRecordedCalls = points.reduce((sum, point) => sum + point.providerRecordedCalls, 0);
+  const qualifiedCalls = points.reduce((sum, point) => sum + point.qualifiedCalls, 0);
+  const pendingCalls = points.reduce((sum, point) => sum + point.pendingCalls, 0);
+  const unsuccessfulCalls = points.reduce((sum, point) => sum + point.unsuccessfulCalls, 0);
+  const unattributedProviderRecordedCalls = points.reduce((sum, point) => sum + point.unattributedProviderRecordedCalls, 0);
+  const unattributedQualifiedCalls = points.reduce((sum, point) => sum + point.unattributedQualifiedCalls, 0);
   const unavailableDays = points.filter((point) => point.visitorQuality === "unavailable").length;
   const estimatedDays = points.filter((point) => point.visitorQuality === "estimated").length;
   const exactDays = points.filter((point) => point.visitorQuality === "exact").length;
   const coverageComplete = points.length > 0 && unavailableDays === 0;
   return {
     usQualifiedVisitors,
-    uniqueCallClickers,
-    totalCallClicks,
-    providerConfirmedCalls,
-    unattributedConfirmedCalls,
-    intentRate: coverageComplete && usQualifiedVisitors > 0 ? uniqueCallClickers / usQualifiedVisitors : null,
+    providerRecordedCalls,
+    qualifiedCalls,
+    pendingCalls,
+    unsuccessfulCalls,
+    unattributedProviderRecordedCalls,
+    unattributedQualifiedCalls,
     approximate: estimatedDays > 0,
     coverageComplete,
     exactDays,
@@ -231,9 +227,8 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
   }
   const runByDate = new Map(input.runs.map((row) => [row.metric_date, row]));
   const healthByKey = new Map(input.health.map((row) => [key(row.domain_id, row.metric_date), row]));
-  const clickByKey = new Map(input.clicks.map((row) => [key(row.domain_id, row.metric_date), row]));
   const conversionByKey = new Map(input.conversions.filter((row) => row.domain_id).map((row) => [key(row.domain_id!, row.metric_date), row]));
-  const unattributedByDate = new Map(input.conversions.filter((row) => !row.domain_id).map((row) => [row.metric_date, integer(row.confirmed_calls)]));
+  const unattributedByDate = new Map(input.conversions.filter((row) => !row.domain_id).map((row) => [row.metric_date, row]));
 
   const pointsFor = (start: string, end: string, domainId: string | null): AnalyticsPoint[] => enumerateDates(start, end).map((date) => {
     const scopedIds = domainId
@@ -255,18 +250,20 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
             ? "legacy"
             : "exact";
     const usQualifiedVisitors = visitorQuality === "unavailable" ? null : rows.reduce((sum, row) => sum + integer(row.us_unique_visitors), 0);
-    const clickRows = scopedIds.map((id) => clickByKey.get(key(id, date))).filter((row): row is AnalyticsClickRow => Boolean(row));
     const conversionRows = scopedIds.map((id) => conversionByKey.get(key(id, date))).filter((row): row is AnalyticsConversionRow => Boolean(row));
+    const unattributed = domainId ? null : unattributedByDate.get(date);
     const telemetryVerified = domainId
       ? integer(healthByKey.get(key(domainId, date))?.verified) === 1
       : integer(run?.telemetry_verified) === 1;
     return {
       date,
       usQualifiedVisitors,
-      uniqueCallClickers: clickRows.reduce((sum, row) => sum + integer(row.unique_call_clickers), 0),
-      totalCallClicks: clickRows.reduce((sum, row) => sum + integer(row.total_call_clicks), 0),
-      providerConfirmedCalls: conversionRows.reduce((sum, row) => sum + integer(row.confirmed_calls), 0) + (domainId ? 0 : (unattributedByDate.get(date) ?? 0)),
-      unattributedConfirmedCalls: domainId ? 0 : (unattributedByDate.get(date) ?? 0),
+      providerRecordedCalls: conversionRows.reduce((sum, row) => sum + integer(row.provider_recorded_calls), 0) + integer(unattributed?.provider_recorded_calls),
+      qualifiedCalls: conversionRows.reduce((sum, row) => sum + integer(row.qualified_calls), 0) + integer(unattributed?.qualified_calls),
+      pendingCalls: conversionRows.reduce((sum, row) => sum + integer(row.pending_calls), 0) + integer(unattributed?.pending_calls),
+      unsuccessfulCalls: conversionRows.reduce((sum, row) => sum + integer(row.unsuccessful_calls), 0) + integer(unattributed?.unsuccessful_calls),
+      unattributedProviderRecordedCalls: integer(unattributed?.provider_recorded_calls),
+      unattributedQualifiedCalls: integer(unattributed?.qualified_calls),
       visitorQuality,
       visitorQualityReason,
       sampleInterval,
@@ -290,9 +287,8 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
     comparison = {
       label: input.range === "7d" ? "previous 7 days" : "previous 30 days",
       usQualifiedVisitorsChange: comparableVisitors ? percentChange(summary.usQualifiedVisitors, previous.usQualifiedVisitors) : null,
-      uniqueCallClickersChange: percentChange(summary.uniqueCallClickers, previous.uniqueCallClickers),
-      totalCallClicksChange: percentChange(summary.totalCallClicks, previous.totalCallClicks),
-      intentRateChange: comparableVisitors ? percentChange(summary.intentRate, previous.intentRate) : null,
+      providerRecordedCallsChange: percentChange(summary.providerRecordedCalls, previous.providerRecordedCalls),
+      qualifiedCallsChange: percentChange(summary.qualifiedCalls, previous.qualifiedCalls),
     };
   }
 
@@ -303,14 +299,14 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
       domainId: domain.id,
       hostname: domain.hostname,
       usQualifiedVisitors: domainSummary.usQualifiedVisitors,
-      uniqueCallClickers: domainSummary.uniqueCallClickers,
-      totalCallClicks: domainSummary.totalCallClicks,
-      providerConfirmedCalls: domainSummary.providerConfirmedCalls,
-      intentRate: domainSummary.intentRate,
+      providerRecordedCalls: domainSummary.providerRecordedCalls,
+      qualifiedCalls: domainSummary.qualifiedCalls,
+      pendingCalls: domainSummary.pendingCalls,
+      unsuccessfulCalls: domainSummary.unsuccessfulCalls,
       approximate: domainSummary.approximate,
       coverageComplete: domainSummary.coverageComplete,
     };
-  }).sort((left, right) => right.usQualifiedVisitors - left.usQualifiedVisitors || right.uniqueCallClickers - left.uniqueCallClickers || left.hostname.localeCompare(right.hostname));
+  }).sort((left, right) => right.providerRecordedCalls - left.providerRecordedCalls || right.qualifiedCalls - left.qualifiedCalls || right.usQualifiedVisitors - left.usQualifiedVisitors || left.hostname.localeCompare(right.hostname));
 
   return {
     range: input.range,

@@ -130,7 +130,10 @@ export interface DomainMetricSummary {
   clicks: number;
   phone_actions: number;
   unique_phone_actions: number;
+  provider_recorded_calls: number;
   provider_confirmed_calls: number;
+  provider_pending_calls: number;
+  provider_unsuccessful_calls: number;
   max_sample_interval: number;
   unique_sample_interval: number;
 }
@@ -163,6 +166,10 @@ export interface MetricsOverview {
     phoneActions: number;
     uniquePhoneActions: number;
     providerConfirmedCalls: number;
+    providerRecordedCalls: number;
+    qualifiedCalls: number;
+    pendingCalls: number;
+    unsuccessfulCalls: number;
     conversions: number;
     postbacks: number;
     failedPostbacks: number;
@@ -187,10 +194,12 @@ export type AnalyticsRange = "7d" | "30d" | "all";
 export interface AnalyticsPoint {
   date: string;
   usQualifiedVisitors: number | null;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  unattributedConfirmedCalls: number;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
+  unattributedProviderRecordedCalls: number;
+  unattributedQualifiedCalls: number;
   visitorQuality: "exact" | "estimated" | "unavailable";
   visitorQualityReason: "exact" | "legacy" | "sampled" | "rollup_unavailable" | "not_measured";
   sampleInterval: number;
@@ -199,11 +208,12 @@ export interface AnalyticsPoint {
 
 export interface AnalyticsSummary {
   usQualifiedVisitors: number;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  unattributedConfirmedCalls: number;
-  intentRate: number | null;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
+  unattributedProviderRecordedCalls: number;
+  unattributedQualifiedCalls: number;
   approximate: boolean;
   coverageComplete: boolean;
   exactDays: number;
@@ -214,19 +224,18 @@ export interface AnalyticsSummary {
 export interface AnalyticsComparison {
   label: string;
   usQualifiedVisitorsChange: number | null;
-  uniqueCallClickersChange: number | null;
-  totalCallClicksChange: number | null;
-  intentRateChange: number | null;
+  providerRecordedCallsChange: number | null;
+  qualifiedCallsChange: number | null;
 }
 
 export interface AnalyticsRanking {
   domainId: string;
   hostname: string;
   usQualifiedVisitors: number;
-  uniqueCallClickers: number;
-  totalCallClicks: number;
-  providerConfirmedCalls: number;
-  intentRate: number | null;
+  providerRecordedCalls: number;
+  qualifiedCalls: number;
+  pendingCalls: number;
+  unsuccessfulCalls: number;
   approximate: boolean;
   coverageComplete: boolean;
 }
