@@ -1,0 +1,102 @@
+{
+  "asOf": "2026-08-13T17:34:30.9342014Z",
+  "provider": "marketcall",
+  "requiredStatuses": [
+    "parsed",
+    "hold",
+    "approved",
+    "refused",
+    "non_qualified",
+    "no_connect"
+  ],
+  "campaigns": [
+    {
+      "campaignId": "351286",
+      "postbacks": [
+        { "id": "10350", "status": "parsed", "active": true },
+        { "id": "10351", "status": "hold", "active": true },
+        { "id": "10352", "status": "approved", "active": true },
+        { "id": "10353", "status": "refused", "active": true },
+        { "id": "10354", "status": "non_qualified", "active": true },
+        { "id": "10355", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351330",
+      "postbacks": [
+        { "id": "10356", "status": "parsed", "active": true },
+        { "id": "10357", "status": "hold", "active": true },
+        { "id": "10358", "status": "approved", "active": true },
+        { "id": "10359", "status": "refused", "active": true },
+        { "id": "10360", "status": "non_qualified", "active": true },
+        { "id": "10361", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351331",
+      "postbacks": [
+        { "id": "10362", "status": "parsed", "active": true },
+        { "id": "10363", "status": "hold", "active": true },
+        { "id": "10364", "status": "approved", "active": true },
+        { "id": "10365", "status": "refused", "active": true },
+        { "id": "10366", "status": "non_qualified", "active": true },
+        { "id": "10367", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351333",
+      "postbacks": [
+        { "id": "10368", "status": "parsed", "active": true },
+        { "id": "10369", "status": "hold", "active": true },
+        { "id": "10370", "status": "approved", "active": true },
+        { "id": "10371", "status": "refused", "active": true },
+        { "id": "10372", "status": "non_qualified", "active": true },
+        { "id": "10373", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351334",
+      "postbacks": [
+        { "id": "10344", "status": "parsed", "active": true },
+        { "id": "10345", "status": "hold", "active": true },
+        { "id": "10346", "status": "approved", "active": true },
+        { "id": "10347", "status": "refused", "active": true },
+        { "id": "10348", "status": "non_qualified", "active": true },
+        { "id": "10349", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351335",
+      "postbacks": [
+        { "id": "10374", "status": "parsed", "active": true },
+        { "id": "10375", "status": "hold", "active": true },
+        { "id": "10376", "status": "approved", "active": true },
+        { "id": "10377", "status": "refused", "active": true },
+        { "id": "10378", "status": "non_qualified", "active": true },
+        { "id": "10379", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351336",
+      "postbacks": [
+        { "id": "10380", "status": "parsed", "active": true },
+        { "id": "10381", "status": "hold", "active": true },
+        { "id": "10382", "status": "approved", "active": true },
+        { "id": "10383", "status": "refused", "active": true },
+        { "id": "10384", "status": "non_qualified", "active": true },
+        { "id": "10385", "status": "no_connect", "active": true }
+      ]
+    },
+    {
+      "campaignId": "351337",
+      "postbacks": [
+        { "id": "10386", "status": "parsed", "active": true },
+        { "id": "10387", "status": "hold", "active": true },
+        { "id": "10388", "status": "approved", "active": true },
+        { "id": "10389", "status": "refused", "active": true },
+        { "id": "10390", "status": "non_qualified", "active": true },
+        { "id": "10391", "status": "no_connect", "active": true }
+      ]
+    }
+  ]
+}

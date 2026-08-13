@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import seed from "../../../ops/expansion_seed.json" with { type: "json" };
+import marketcallScopeContent from "../../../ops/marketcall_scope_content.json" with { type: "json" };
 import { compileHomeServicesHtml, contentSchema, domainImportSchema } from ".";
 
 describe("expansion seed", () => {
@@ -14,7 +15,9 @@ describe("expansion seed", () => {
       expect(parsedDomain.sourceLabels.map((label) => label.toLowerCase())).not.toContain("traffic2");
       expect(parsedDomain.localEvidence.length).toBeGreaterThanOrEqual(2);
       expect(parsedDomain.trafficProfile?.coveredDays).toBeGreaterThanOrEqual(10);
-      const content = contentSchema.parse(seed.content[domain.hostname as keyof typeof seed.content]);
+      const rawContent = marketcallScopeContent[domain.hostname as keyof typeof marketcallScopeContent]
+        ?? seed.content[domain.hostname as keyof typeof seed.content];
+      const content = contentSchema.parse(rawContent);
       expect(content.disclosure).toMatch(/^This website is an independent information and referral guide\./);
       expect(content.cta.disabledText).toBeTruthy();
       imagePaths.add(content.image.assetPath);

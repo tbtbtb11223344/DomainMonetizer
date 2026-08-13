@@ -56,7 +56,7 @@ export function evaluateMarketcallPilotContract(monetization, spec) {
     ["active campaigns", monetization.activeCampaigns, expectedCampaignCount],
     ["active routing policies", monetization.activeRoutingPolicies, expectedRouteCount],
   ]) {
-    if (Number(value) !== expectedCount) issues.push(`${label}=${Number(value)}, expected ${expectedCount}`);
+    if (Number(value) < expectedCount) issues.push(`${label}=${Number(value)}, expected at least ${expectedCount}`);
   }
   for (const [label, value] of Object.entries({
     clicks: monetization.clicks,
@@ -76,10 +76,13 @@ export function evaluateMarketcallPilotContract(monetization, spec) {
   const actual = monetization.activeRoutes.map(normalizedRoute).sort((left, right) => routeKey(left).localeCompare(routeKey(right)));
   const actualKeys = actual.map(routeKey);
   const expectedKeys = expected.map(routeKey);
-  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+  const expectedHostnames = new Set(expected.map((route) => route.hostname));
+  const pilotActual = actual.filter((route) => expectedHostnames.has(route.hostname));
+  const pilotActualKeys = pilotActual.map(routeKey);
+  if (JSON.stringify(pilotActualKeys) !== JSON.stringify(expectedKeys)) {
     issues.push(`Active Marketcall route set differs from the committed pilot contract (observed ${actualKeys.join(", ") || "none"})`);
   }
-  for (const route of actual) {
+  for (const route of pilotActual) {
     if (route.offerStatus !== "active" || route.campaignStatus !== "active" || route.routingStatus !== "active") {
       issues.push(`${route.hostname}: offer, campaign, and routing policy must all be active`);
     }

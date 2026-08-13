@@ -1,0 +1,178 @@
+{
+  "americraftsw.com": {
+    "schemaVersion": 1,
+    "locale": "en-US",
+    "vertical": "Siding installation",
+    "location": { "city": "Austin", "region": "Texas", "country": "US" },
+    "seo": {
+      "title": "Austin Siding Installation Guide",
+      "description": "Compare siding installation in Austin with clearer product, water-management, trim, installation, and warranty questions."
+    },
+    "hero": {
+      "eyebrow": "Austin siding guide",
+      "title": "Plan the siding system, not only the color.",
+      "summary": "A useful siding proposal explains the wall condition, weather barrier, flashing, trim, ventilation, installation details, and warranty."
+    },
+    "servicesHeading": "Three parts of a complete siding quote",
+    "services": [
+      { "title": "What is behind the existing siding?", "description": "Ask how the crew will identify moisture, damaged sheathing, flashing gaps, and wall conditions before covering them." },
+      { "title": "Which system fits the house?", "description": "Compare material, profile, insulation, weather barrier, fasteners, clearances, ventilation, finish, and maintenance." },
+      { "title": "How will openings be finished?", "description": "Confirm flashing and trim around doors, roof lines, utilities, vents, corners, and other penetrations." }
+    ],
+    "guide": {
+      "heading": "Walk the exterior before pricing",
+      "paragraphs": [
+        "Mark damaged areas, water stains, loose panels, exposed edges, and locations where landscaping or access may affect the work.",
+        "Request the exact siding product, color, profile, underlayment, flashing, trim, fasteners, and installation instructions in writing.",
+        "Separate removal, disposal, wall preparation, siding installation, trim, permits, taxes, and optional insulation in the estimate.",
+        "Read the workmanship and manufacturer warranties for maintenance, transfer rules, color variation, impact, moisture, and claim procedures."
+      ]
+    },
+    "faqHeading": "Austin siding questions",
+    "faqs": [
+      { "question": "Can new siding cover the old material?", "answer": "Sometimes, but wall condition, moisture, flashing, manufacturer instructions, and local requirements should determine the method." },
+      { "question": "Does insulated siding replace wall insulation?", "answer": "Not necessarily. Ask what thermal benefit is claimed, how it is measured, and how the system handles moisture and ventilation." },
+      { "question": "What can change the final price?", "answer": "Hidden wall damage, access, trim complexity, disposal, utility details, permit requirements, and approved scope changes can affect cost." }
+    ],
+    "cta": {
+      "label": "Check local siding availability",
+      "supportingText": "Provider availability, pricing, and service terms vary.",
+      "disabledText": "We're still setting up siding provider coverage around Austin. No request form or call line is live today.",
+      "slot": "primary"
+    },
+    "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+    "image": { "assetPath": "/__dm/assets/windows-exterior.webp", "alt": "A well-finished residential siding exterior in Austin" }
+  },
+  "361treeandlandscape.com": {
+    "schemaVersion": 1,
+    "locale": "en-US",
+    "vertical": "Tree removal",
+    "location": { "city": "Corpus Christi", "region": "Texas", "country": "US" },
+    "seo": {
+      "title": "Corpus Christi Tree Removal Guide",
+      "description": "Compare tree removal in Corpus Christi with a clear plan for hazards, access, rigging, cleanup, stump work, and permits."
+    },
+    "hero": {
+      "eyebrow": "Corpus Christi tree-removal guide",
+      "title": "Remove a hazardous tree with a site-specific plan.",
+      "summary": "A responsible removal quote explains why the tree must come down, how the crew will control each section, and what remains afterward."
+    },
+    "servicesHeading": "Three decisions before tree removal",
+    "services": [
+      { "title": "Why is removal recommended?", "description": "Ask for the observed defects, decline, root issues, storm damage, clearance conflict, or site risk supporting the recommendation." },
+      { "title": "How will the tree come down?", "description": "Confirm access, rigging, crane or lift needs, drop zones, utility coordination, and protection for roofs, fences, paving, and irrigation." },
+      { "title": "What is included afterward?", "description": "List hauling, wood handling, stump grinding, root-area limits, backfill, cleanup, and any restoration separately." }
+    ],
+    "guide": {
+      "heading": "Prepare the property for a removal estimate",
+      "paragraphs": [
+        "Identify the tree, nearby structures, gates, overhead lines, underground utilities, septic areas, pets, and access restrictions.",
+        "Ask whether an arborist assessment, utility clearance, municipal permission, neighbor coordination, or traffic control is required.",
+        "The written scope should name crew and equipment, removal method, protection, debris handling, stump option, schedule, and weather terms.",
+        "Keep clear of unstable trees and downed lines. Use emergency or utility help first when there is an immediate public-safety hazard."
+      ]
+    },
+    "faqHeading": "Corpus Christi tree-removal questions",
+    "faqs": [
+      { "question": "Is stump grinding included?", "answer": "Not always. Ask for grinding depth, debris handling, surface roots, backfill, and restoration as a separate line item." },
+      { "question": "Who handles utility lines?", "answer": "The proposal should identify required utility clearance and who coordinates it before work begins." },
+      { "question": "What should an emergency quote include?", "answer": "It should explain the hazard, access, equipment, stabilization, debris handling, price, and any work left for a later visit." }
+    ],
+    "cta": {
+      "label": "Check local tree-removal availability",
+      "supportingText": "Provider availability, pricing, and service terms vary.",
+      "disabledText": "We're still setting up tree-removal provider coverage around Corpus Christi. No request form or call line is live today.",
+      "slot": "primary"
+    },
+    "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+    "image": { "assetPath": "/__dm/assets/tree-care.webp", "alt": "A professional crew preparing for controlled residential tree removal" }
+  },
+  "adamsfoundationrepair.com": {
+    "schemaVersion": 1,
+    "locale": "en-US",
+    "vertical": "New foundations and concrete",
+    "location": { "city": "Wentzville", "region": "Missouri", "country": "US" },
+    "seo": {
+      "title": "Wentzville New Foundation Construction Guide",
+      "description": "Compare new concrete foundation construction in Wentzville with clearer site, engineering, excavation, drainage, concrete, and inspection questions."
+    },
+    "hero": {
+      "eyebrow": "Wentzville new-foundation guide",
+      "title": "Start a new foundation with the site and plans aligned.",
+      "summary": "For new homes and additions, a clear proposal connects soils, engineering, excavation, forms, reinforcement, concrete, drainage, and inspections."
+    },
+    "servicesHeading": "Three parts of a new-foundation proposal",
+    "services": [
+      { "title": "What do the site and plans require?", "description": "Confirm survey, soils information, elevations, engineering details, setbacks, access, utilities, and permit responsibilities." },
+      { "title": "What concrete assembly is specified?", "description": "List footings, walls or slab, reinforcement, mix, vapor and moisture details, embeds, openings, joints, and curing requirements." },
+      { "title": "What happens before backfill?", "description": "Confirm inspections, drainage components, dampproofing where specified, insulation, testing, documentation, and approval to proceed." }
+    ],
+    "guide": {
+      "heading": "Bring the construction documents to the estimate",
+      "paragraphs": [
+        "Share the survey, architectural and structural plans, geotechnical information, elevations, utility locations, and target schedule.",
+        "Ask who handles excavation, haul-off, stone base, forms, reinforcement, concrete placement, pumping, finishing, curing, and backfill.",
+        "Separate allowances, engineering changes, unsuitable soils, groundwater handling, winter conditions, permits, testing, and inspections.",
+        "The final record should include approved plans, inspection results, mix information, change orders, photographs, and warranty terms."
+      ]
+    },
+    "faqHeading": "New-foundation questions in Wentzville",
+    "faqs": [
+      { "question": "Who determines the footing and reinforcement design?", "answer": "The project plans and qualified design professionals should define the structural requirements, subject to local review and site conditions." },
+      { "question": "What can delay concrete placement?", "answer": "Excavation conditions, inspections, reinforcement, access, weather, concrete supply, pumping, and approved plan changes can affect timing." },
+      { "question": "What should be checked before backfill?", "answer": "Confirm required inspections, wall strength, drainage details, specified coatings or insulation, penetrations, and documentation." }
+    ],
+    "cta": {
+      "label": "Check local new-foundation availability",
+      "supportingText": "For new concrete or foundation construction only. Existing-structure service calls are not accepted. Provider availability, pricing, and terms vary.",
+      "disabledText": "We're still setting up new-foundation construction coverage around Wentzville. No request form or call line is live today.",
+      "slot": "primary"
+    },
+    "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+    "image": { "assetPath": "/__dm/assets/foundation-repair.webp", "alt": "Forms and reinforcement prepared for a new residential concrete foundation" }
+  },
+  "marbleshooters.net": {
+    "schemaVersion": 1,
+    "locale": "en-US",
+    "vertical": "Natural-stone flooring installation",
+    "location": { "city": "Irvine", "region": "California", "country": "US" },
+    "seo": {
+      "title": "Irvine Natural-Stone Flooring Installation Guide",
+      "description": "Compare natural-stone flooring installation in Irvine with clear questions about material, substrate, layout, movement joints, sealing, and schedule."
+    },
+    "hero": {
+      "eyebrow": "Irvine stone-flooring guide",
+      "title": "Plan a stone floor from the substrate up.",
+      "summary": "A durable stone-flooring project depends on the material, substrate, layout, setting system, movement accommodation, finish, and care plan."
+    },
+    "servicesHeading": "Three decisions before stone-flooring installation",
+    "services": [
+      { "title": "Is the substrate ready?", "description": "Ask for flatness, moisture, cracks, deflection, level changes, and the preparation specified for the selected stone and setting system." },
+      { "title": "How will the stone be laid out?", "description": "Confirm tile size, lot variation, dry layout, pattern, grout width, transitions, edges, thresholds, and movement joints." },
+      { "title": "What finish and care are required?", "description": "List factory or field finish, grout, sealer where appropriate, cure time, cleaning products, access limits, and maintenance guidance." }
+    ],
+    "guide": {
+      "heading": "Bring samples and room conditions to the quote",
+      "paragraphs": [
+        "Document room dimensions, sunlight, wet areas, adjoining floors, stairs, heat systems, traffic, pets, and access constraints.",
+        "Request the exact stone, grade, thickness, finish, lot expectations, setting materials, grout, movement details, and acclimation requirements.",
+        "Separate removal, substrate preparation, natural-stone flooring installation, transitions, base details, sealing, disposal, and tax.",
+        "Keep product records, layout approvals, maintenance instructions, spare material, and warranty information after completion."
+      ]
+    },
+    "faqHeading": "Irvine stone-flooring questions",
+    "faqs": [
+      { "question": "Does every stone floor need sealing?", "answer": "No single rule fits every stone and setting. Ask the installer and product supplier what is specified and test compatibility first." },
+      { "question": "Why does substrate flatness matter?", "answer": "Large or rigid stone units can show lippage and stress when the substrate is uneven, so preparation tolerances should be agreed before setting." },
+      { "question": "How much extra stone should be ordered?", "answer": "The quantity depends on room shape, pattern, selection, breakage, and future spare needs. The quote should state the assumption." }
+    ],
+    "cta": {
+      "label": "Check local stone-flooring availability",
+      "supportingText": "Provider availability, pricing, and service terms vary.",
+      "disabledText": "We're still setting up stone-flooring provider coverage around Irvine. No request form or call line is live today.",
+      "slot": "primary"
+    },
+    "disclosure": "This website is an independent information and referral guide. It is not the former business that used this domain and is not affiliated with any prior owner or operator. We may receive compensation when you contact a provider through this site. Verify availability and terms directly.",
+    "image": { "assetPath": "/__dm/assets/stone-care.webp", "alt": "Natural-stone floor tiles prepared for a residential installation" }
+  }
+}

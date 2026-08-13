@@ -10,6 +10,8 @@ if (!token) throw new Error("OPERATOR_API_TOKEN is required");
 if (Boolean(accessClientId) !== Boolean(accessClientSecret)) throw new Error("Both CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required together");
 
 const seed = JSON.parse(await readFile(new URL("./expansion_seed.json", import.meta.url), "utf8"));
+const marketcallScopeContent = JSON.parse(await readFile(new URL("./marketcall_scope_content.json", import.meta.url), "utf8"));
+seed.content = { ...seed.content, ...marketcallScopeContent };
 
 async function call(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, {

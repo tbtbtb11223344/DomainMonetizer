@@ -1,12 +1,14 @@
 {
   "asOf": "2026-08-13T13:32:56.6452455Z",
   "provider": "marketcall",
+  "activationPolicy": "per_website",
   "activationReady": false,
-  "activationBlocker": "provider_campaign_and_material_moderation",
+  "activationBlocker": "one_website_material_pending_provider_moderation",
   "campaigns": [
     {
       "offerId": "10887",
       "offerTitle": "Kitchen Remodeling Bundle| Inbounds | Dynamic | Pre-Approval",
+      "offerVertical": "kitchen_remodeling",
       "campaignId": "351286",
       "campaignTitle": "accentpwp.com SEO",
       "campaignState": "approved",
@@ -18,13 +20,17 @@
           "hostname": "accentpwp.com",
           "materialId": "91770",
           "materialTitle": "accentpwp.com cabinetry guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:00.266Z",
+          "releaseId": "rel_679359d2b47142b5a7f844217b99e1bd"
         }
       ]
     },
     {
       "offerId": "12253",
       "offerTitle": "Siding Bundle | Inbounds | Dynamic | Pre- Approval",
+      "offerVertical": "siding",
       "campaignId": "351330",
       "campaignTitle": "americraftsw.com SEO",
       "campaignState": "approved",
@@ -36,13 +42,22 @@
           "hostname": "americraftsw.com",
           "materialId": "91803",
           "materialTitle": "americraftsw.com siding guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:09.200Z",
+          "releaseId": "rel_203ffe00d7de46faab466a857f65b0a9",
+          "contentGuard": {
+            "ctaLabel": "Check local siding availability",
+            "requiredPhrases": ["siding installation"],
+            "forbiddenPhrases": ["window replacement"]
+          }
         }
       ]
     },
     {
       "offerId": "8997",
       "offerTitle": "Windows Bundle | Inbounds | Dynamic | Pre-Approval",
+      "offerVertical": "window_replacement",
       "campaignId": "351331",
       "campaignTitle": "homespirewindows.com SEO",
       "campaignState": "approved",
@@ -54,13 +69,17 @@
           "hostname": "homespirewindows.com",
           "materialId": "91804",
           "materialTitle": "homespirewindows.com replacement-window guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:17.121Z",
+          "releaseId": "rel_34c770654e964ec7a6a8c14f44215c81"
         }
       ]
     },
     {
       "offerId": "8092",
       "offerTitle": "Pest Control & Wildlife Removal Bundle | Inbounds | Dynamic | Pre- Approval",
+      "offerVertical": "pest_control",
       "campaignId": "351333",
       "campaignTitle": "sniperpestcontrol.net SEO",
       "campaignState": "approved",
@@ -72,13 +91,17 @@
           "hostname": "sniperpestcontrol.net",
           "materialId": "91805",
           "materialTitle": "sniperpestcontrol.net pest-control guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:21.782Z",
+          "releaseId": "rel_4efe41d4737745ecb899e8229bc8f78a"
         }
       ]
     },
     {
       "offerId": "10211",
       "offerTitle": "Flooring Bundle | Inbounds | Dynamic | Pre- Approval",
+      "offerVertical": "flooring",
       "campaignId": "351334",
       "campaignTitle": "Flooring SEO | piedmontfloor.com + marbleshooters.net",
       "campaignState": "approved",
@@ -90,19 +113,29 @@
           "hostname": "piedmontfloor.com",
           "materialId": "91806",
           "materialTitle": "piedmontfloor.com flooring guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:27.085Z",
+          "releaseId": "rel_7921e0a7bb1642898aff093443f14d40"
         },
         {
           "hostname": "marbleshooters.net",
           "materialId": "91807",
           "materialTitle": "marbleshooters.net natural-stone flooring guide",
-          "materialState": "manager_moderation"
+          "materialState": "manager_moderation",
+          "activationState": "waiting_for_material_approval",
+          "contentGuard": {
+            "ctaLabel": "Check local stone-flooring availability",
+            "requiredPhrases": ["natural-stone flooring installation"],
+            "forbiddenPhrases": ["polishing", "restoration", "repair"]
+          }
         }
       ]
     },
     {
       "offerId": "11316",
       "offerTitle": "Tree Removal Bundle | Inbounds | Dynamic | Pre- Approval",
+      "offerVertical": "tree_removal",
       "campaignId": "351335",
       "campaignTitle": "361treeandlandscape.com SEO | Tree Removal",
       "campaignState": "approved",
@@ -114,13 +147,22 @@
           "hostname": "361treeandlandscape.com",
           "materialId": "91808",
           "materialTitle": "361treeandlandscape.com tree-removal guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:38.201Z",
+          "releaseId": "rel_cee4942d6a704200ad902a23c4702a31",
+          "contentGuard": {
+            "ctaLabel": "Check local tree-removal availability",
+            "requiredPhrases": ["tree removal"],
+            "forbiddenPhrases": ["trimming", "pruning", "landscape maintenance"]
+          }
         }
       ]
     },
     {
       "offerId": "11166",
       "offerTitle": "Garage Door Bundle | Inbounds | Dynamic | Pre- Approval",
+      "offerVertical": "garage_door",
       "campaignId": "351336",
       "campaignTitle": "a-1garagedoorsportland.com SEO",
       "campaignState": "approved",
@@ -132,13 +174,17 @@
           "hostname": "a-1garagedoorsportland.com",
           "materialId": "91809",
           "materialTitle": "a-1garagedoorsportland.com garage-door guide",
-          "materialState": "accepted"
+          "materialState": "accepted",
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:44.137Z",
+          "releaseId": "rel_6dc7e70e7cfd4ff7808a29b80a174bb8"
         }
       ]
     },
     {
       "offerId": "10212",
       "offerTitle": "Concrete Service Bundle | Inbounds | Dynamic | Pre-Approval",
+      "offerVertical": "concrete_service",
       "campaignId": "351337",
       "campaignTitle": "adamsfoundationrepair.com SEO | New Concrete Only",
       "campaignState": "approved",
@@ -151,7 +197,15 @@
           "materialId": "91810",
           "materialTitle": "adamsfoundationrepair.com new-foundation guide",
           "materialState": "accepted",
-          "scope": "new concrete or foundation construction only; repair and waterproofing calls excluded"
+          "activationState": "active",
+          "activatedAt": "2026-08-13T17:36:50.394Z",
+          "releaseId": "rel_fab08aec2a68441db71be4d16bca940b",
+          "scope": "new concrete or foundation construction only; repair and waterproofing calls excluded",
+          "contentGuard": {
+            "ctaLabel": "Check local new-foundation availability",
+            "requiredPhrases": ["new concrete foundation construction"],
+            "forbiddenPhrases": ["repair", "waterproof"]
+          }
         }
       ]
     }

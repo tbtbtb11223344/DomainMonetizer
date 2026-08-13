@@ -36,7 +36,7 @@ describe("Marketcall economic-pilot contract", () => {
     expect(evaluateMarketcallPilotContract(baseline({ clicks: 9, conversions: 2, postbacks: 4 }), spec)).toEqual([]);
   });
 
-  it("rejects missing, extra, or cross-domain campaign routes", () => {
+  it("rejects missing or cross-domain pilot routes", () => {
     const routes = baseline().activeRoutes;
     routes[0] = { ...routes[0], campaign_external_id: "351040" };
     expect(evaluateMarketcallPilotContract(baseline({ activeRoutes: routes }), spec)).toContainEqual(
@@ -44,9 +44,27 @@ describe("Marketcall economic-pilot contract", () => {
     );
   });
 
+  it("allows independently activated expansion routes", () => {
+    const expanded = baseline();
+    expanded.activeOffers = 4;
+    expanded.activeCampaigns = 4;
+    expanded.activeRoutingPolicies = 5;
+    expanded.activeRoutes.push({
+      hostname: "piedmontfloor.com",
+      provider: "marketcall",
+      offer_external_id: "10211",
+      campaign_external_id: "351334",
+      destination_type: "phone",
+      offer_status: "active",
+      campaign_status: "active",
+      routing_status: "active",
+    });
+    expect(evaluateMarketcallPilotContract(expanded, spec)).toEqual([]);
+  });
+
   it("fails on provider-processing errors and incorrect active counts", () => {
     expect(evaluateMarketcallPilotContract(baseline({ activeOffers: 2, failedPostbacks: 1 }), spec)).toEqual(expect.arrayContaining([
-      "active offers=2, expected 3",
+      "active offers=2, expected at least 3",
       "failed postbacks=1",
     ]));
   });

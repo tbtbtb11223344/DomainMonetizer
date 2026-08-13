@@ -26,10 +26,11 @@ describe("Marketcall expansion applications", () => {
     expect(new Set(hostnames).size).toBe(hostnames.length);
   });
 
-  it("keeps the incomplete provider application batch dormant", () => {
+  it("records readiness per website without making the pending website a batch-wide blocker", () => {
     expect(applications.provider).toBe("marketcall");
+    expect(applications.activationPolicy).toBe("per_website");
     expect(applications.activationReady).toBe(false);
-    expect(applications.activationBlocker).toBe("provider_campaign_and_material_moderation");
+    expect(applications.activationBlocker).toBe("one_website_material_pending_provider_moderation");
 
     const campaignStates = new Set();
     const materialStates = new Set();
@@ -42,12 +43,17 @@ describe("Marketcall expansion applications", () => {
       expect(campaign.did).toMatch(/^\+1\d{10}$/);
       for (const material of campaign.materials) {
         expect(["accepted", "manager_moderation", "merchant_moderation"]).toContain(material.materialState);
+        expect(material.activationState).toMatch(/^(active|waiting_for_)/);
         materialStates.add(material.materialState);
       }
     }
 
     expect(campaignStates).toEqual(new Set(["approved"]));
     expect(materialStates.has("manager_moderation") || materialStates.has("merchant_moderation")).toBe(true);
+    expect(applications.campaigns.find((campaign) => campaign.campaignId === "351334").materials).toEqual(expect.arrayContaining([
+      expect.objectContaining({ hostname: "piedmontfloor.com", materialState: "accepted", activationState: "active" }),
+      expect.objectContaining({ hostname: "marbleshooters.net", materialState: "manager_moderation", activationState: "waiting_for_material_approval" }),
+    ]));
   });
 
   it("does not add pending expansion websites to the active pilot contract", () => {
