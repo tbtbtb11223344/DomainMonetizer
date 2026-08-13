@@ -35,6 +35,12 @@ export interface AnalyticsHealthRow {
   verified: number | string;
 }
 
+export interface AnalyticsCallRequestRow {
+  domain_id: string;
+  metric_date: string;
+  valid_visitor_call_requests: number | string;
+}
+
 export interface AnalyticsConversionRow {
   domain_id: string | null;
   metric_date: string;
@@ -47,6 +53,7 @@ export interface AnalyticsConversionRow {
 export interface AnalyticsPoint {
   date: string;
   usQualifiedVisitors: number | null;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
@@ -61,6 +68,7 @@ export interface AnalyticsPoint {
 
 export interface AnalyticsSummary {
   usQualifiedVisitors: number;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
@@ -77,7 +85,7 @@ export interface AnalyticsSummary {
 export interface AnalyticsComparison {
   label: string;
   usQualifiedVisitorsChange: number | null;
-  providerRecordedCallsChange: number | null;
+  validVisitorCallRequestsChange: number | null;
   qualifiedCallsChange: number | null;
 }
 
@@ -85,6 +93,7 @@ export interface AnalyticsRanking {
   domainId: string;
   hostname: string;
   usQualifiedVisitors: number;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
@@ -116,6 +125,7 @@ export interface BuildAnalyticsInput {
   metrics: AnalyticsMetricRow[];
   runs: AnalyticsRunRow[];
   health: AnalyticsHealthRow[];
+  callRequests: AnalyticsCallRequestRow[];
   conversions: AnalyticsConversionRow[];
 }
 
@@ -155,6 +165,10 @@ export function analyticsRunSelectionSql(): string {
   return "SELECT r.metric_date,r.unique_sample_interval,r.telemetry_verified FROM analytics_rollup_runs r JOIN (SELECT metric_date,MAX(started_at) AS started_at FROM analytics_rollup_runs WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date) latest ON latest.metric_date=r.metric_date AND latest.started_at=r.started_at WHERE r.status='succeeded' ORDER BY r.metric_date";
 }
 
+export function analyticsCallRequestAggregationSql(domainScoped: boolean): string {
+  return `SELECT domain_id,substr(occurred_at,1,10) AS metric_date,COUNT(*) AS valid_visitor_call_requests FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND country='US' AND visitor_id_hash IS NOT NULL AND length(visitor_id_hash)=64 AND visitor_id_hash NOT GLOB '*[^0-9a-f]*' AND occurred_at>=? AND occurred_at<?${domainScoped ? " AND domain_id=?" : ""} GROUP BY domain_id,substr(occurred_at,1,10) ORDER BY metric_date,domain_id`;
+}
+
 export function analyticsBounds(range: AnalyticsRange, telemetryStartDate: string, latestCompletedDate: string): AnalyticsBounds {
   if (range === "all") return { current: { start: telemetryStartDate, end: latestCompletedDate }, previous: null };
   const days = range === "7d" ? 7 : 30;
@@ -179,6 +193,7 @@ function percentChange(current: number | null, previous: number | null): number 
 
 function summarize(points: AnalyticsPoint[]): AnalyticsSummary {
   const usQualifiedVisitors = points.reduce((sum, point) => sum + (point.usQualifiedVisitors ?? 0), 0);
+  const validVisitorCallRequests = points.reduce((sum, point) => sum + point.validVisitorCallRequests, 0);
   const providerRecordedCalls = points.reduce((sum, point) => sum + point.providerRecordedCalls, 0);
   const qualifiedCalls = points.reduce((sum, point) => sum + point.qualifiedCalls, 0);
   const pendingCalls = points.reduce((sum, point) => sum + point.pendingCalls, 0);
@@ -191,6 +206,7 @@ function summarize(points: AnalyticsPoint[]): AnalyticsSummary {
   const coverageComplete = points.length > 0 && unavailableDays === 0;
   return {
     usQualifiedVisitors,
+    validVisitorCallRequests,
     providerRecordedCalls,
     qualifiedCalls,
     pendingCalls,
@@ -227,6 +243,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
   }
   const runByDate = new Map(input.runs.map((row) => [row.metric_date, row]));
   const healthByKey = new Map(input.health.map((row) => [key(row.domain_id, row.metric_date), row]));
+  const callRequestByKey = new Map(input.callRequests.map((row) => [key(row.domain_id, row.metric_date), row]));
   const conversionByKey = new Map(input.conversions.filter((row) => row.domain_id).map((row) => [key(row.domain_id!, row.metric_date), row]));
   const unattributedByDate = new Map(input.conversions.filter((row) => !row.domain_id).map((row) => [row.metric_date, row]));
 
@@ -250,6 +267,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
             ? "legacy"
             : "exact";
     const usQualifiedVisitors = visitorQuality === "unavailable" ? null : rows.reduce((sum, row) => sum + integer(row.us_unique_visitors), 0);
+    const callRequestRows = scopedIds.map((id) => callRequestByKey.get(key(id, date))).filter((row): row is AnalyticsCallRequestRow => Boolean(row));
     const conversionRows = scopedIds.map((id) => conversionByKey.get(key(id, date))).filter((row): row is AnalyticsConversionRow => Boolean(row));
     const unattributed = domainId ? null : unattributedByDate.get(date);
     const telemetryVerified = domainId
@@ -258,6 +276,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
     return {
       date,
       usQualifiedVisitors,
+      validVisitorCallRequests: callRequestRows.reduce((sum, row) => sum + integer(row.valid_visitor_call_requests), 0),
       providerRecordedCalls: conversionRows.reduce((sum, row) => sum + integer(row.provider_recorded_calls), 0) + integer(unattributed?.provider_recorded_calls),
       qualifiedCalls: conversionRows.reduce((sum, row) => sum + integer(row.qualified_calls), 0) + integer(unattributed?.qualified_calls),
       pendingCalls: conversionRows.reduce((sum, row) => sum + integer(row.pending_calls), 0) + integer(unattributed?.pending_calls),
@@ -287,7 +306,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
     comparison = {
       label: input.range === "7d" ? "previous 7 days" : "previous 30 days",
       usQualifiedVisitorsChange: comparableVisitors ? percentChange(summary.usQualifiedVisitors, previous.usQualifiedVisitors) : null,
-      providerRecordedCallsChange: percentChange(summary.providerRecordedCalls, previous.providerRecordedCalls),
+      validVisitorCallRequestsChange: percentChange(summary.validVisitorCallRequests, previous.validVisitorCallRequests),
       qualifiedCallsChange: percentChange(summary.qualifiedCalls, previous.qualifiedCalls),
     };
   }
@@ -299,6 +318,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
       domainId: domain.id,
       hostname: domain.hostname,
       usQualifiedVisitors: domainSummary.usQualifiedVisitors,
+      validVisitorCallRequests: domainSummary.validVisitorCallRequests,
       providerRecordedCalls: domainSummary.providerRecordedCalls,
       qualifiedCalls: domainSummary.qualifiedCalls,
       pendingCalls: domainSummary.pendingCalls,
@@ -306,7 +326,7 @@ export function buildAnalyticsResponse(input: BuildAnalyticsInput): AnalyticsRes
       approximate: domainSummary.approximate,
       coverageComplete: domainSummary.coverageComplete,
     };
-  }).sort((left, right) => right.providerRecordedCalls - left.providerRecordedCalls || right.qualifiedCalls - left.qualifiedCalls || right.usQualifiedVisitors - left.usQualifiedVisitors || left.hostname.localeCompare(right.hostname));
+  }).sort((left, right) => right.validVisitorCallRequests - left.validVisitorCallRequests || right.providerRecordedCalls - left.providerRecordedCalls || right.qualifiedCalls - left.qualifiedCalls || right.usQualifiedVisitors - left.usQualifiedVisitors || left.hostname.localeCompare(right.hostname));
 
   return {
     range: input.range,

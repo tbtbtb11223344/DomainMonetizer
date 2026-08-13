@@ -18,9 +18,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   analyticsBounds,
+  analyticsCallRequestAggregationSql,
   analyticsRunSelectionSql,
   buildAnalyticsResponse,
   parseAnalyticsRange,
+  type AnalyticsCallRequestRow,
   type AnalyticsConversionRow,
   type AnalyticsDomainRow,
   type AnalyticsHealthRow,
@@ -49,6 +51,7 @@ interface OverviewDomainRow extends HealthPortfolioDomain {
   unique_sample_interval: number | string;
   phone_actions: number | string;
   unique_phone_actions: number | string;
+  valid_visitor_call_requests: number | string;
   provider_recorded_calls: number | string;
   provider_confirmed_calls: number | string;
   provider_pending_calls: number | string;
@@ -62,6 +65,7 @@ interface MonetizationStateRow {
   clicks: number | string;
   phone_actions: number | string;
   unique_phone_actions: number | string;
+  valid_visitor_call_requests: number | string;
   provider_confirmed_calls: number | string;
   provider_pending_calls: number | string;
   provider_unsuccessful_calls: number | string;
@@ -260,13 +264,15 @@ export function mountApi(app: App): void {
     const domainClause = selectedDomainId ? " AND domain_id=?" : "";
     const metricDomainClause = selectedDomainId ? " AND m.domain_id=?" : "";
     const conversionDomainClause = selectedDomainId ? " AND domain_id=?" : "";
-    const [metrics, runs, health, conversions] = await Promise.all([
+    const [metrics, runs, health, callRequests, conversions] = await Promise.all([
       c.env.DB.prepare(`SELECT m.domain_id,m.metric_date,m.us_unique_visitors,m.unique_sample_interval,m.telemetry_version FROM daily_domain_metrics m JOIN domains d ON d.id=m.domain_id WHERE d.measurement_started_at IS NOT NULL AND m.metric_date>=? AND m.metric_date<=?${metricDomainClause} ORDER BY m.metric_date,m.domain_id`)
         .bind(queryStart, bounds.current.end, ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsMetricRow>(),
       c.env.DB.prepare(analyticsRunSelectionSql())
         .bind(queryStart, bounds.current.end).all<AnalyticsRunRow>(),
       c.env.DB.prepare(`SELECT domain_id,metric_date,verified FROM daily_domain_telemetry_health WHERE metric_date>=? AND metric_date<=?${domainClause} ORDER BY metric_date,domain_id`)
         .bind(queryStart, bounds.current.end, ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsHealthRow>(),
+      c.env.DB.prepare(analyticsCallRequestAggregationSql(Boolean(selectedDomainId)))
+        .bind(`${queryStart}T00:00:00.000Z`, queryEndExclusive.toISOString(), ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsCallRequestRow>(),
       c.env.DB.prepare(`SELECT domain_id,substr(COALESCE(occurred_at,received_at),1,10) AS metric_date,COUNT(*) AS provider_recorded_calls,SUM(CASE WHEN status='accepted' THEN 1 ELSE 0 END) AS qualified_calls,SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending_calls,SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS unsuccessful_calls FROM conversions WHERE COALESCE(occurred_at,received_at)>=? AND COALESCE(occurred_at,received_at)<?${conversionDomainClause} GROUP BY domain_id,substr(COALESCE(occurred_at,received_at),1,10) ORDER BY metric_date,domain_id`)
         .bind(`${queryStart}T00:00:00.000Z`, queryEndExclusive.toISOString(), ...(selectedDomainId ? [selectedDomainId] : [])).all<AnalyticsConversionRow>(),
     ]);
@@ -279,6 +285,7 @@ export function mountApi(app: App): void {
       metrics: metrics.results,
       runs: runs.results,
       health: health.results,
+      callRequests: callRequests.results,
       conversions: conversions.results,
     }));
   });
@@ -309,11 +316,11 @@ export function mountApi(app: App): void {
       : [exactSessionStartDate, exactSessionStartDate, sampledMetricDate, sampledMetricDate, sampledMetricDate, exactSessionStartDate, telemetryStartDate];
     const [domains, latestRun, latestHealth, monetizationState, activeRoutes] = await Promise.all([
       c.env.DB.prepare(
-        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval, (SELECT COUNT(*) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1) AS phone_actions, (SELECT COUNT(DISTINCT COALESCE(c.visitor_id_hash,c.id)) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1 AND c.likely_human=1) AS unique_phone_actions, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id) AS provider_recorded_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='accepted') AS provider_confirmed_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='pending') AS provider_pending_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='rejected') AS provider_unsuccessful_calls FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
+        `SELECT d.id AS domain_id, d.hostname, d.lifecycle_status, d.active_release_id, d.measurement_started_at, COUNT(m.metric_date) AS days_with_traffic, MIN(m.metric_date) AS first_metric_date, MAX(m.metric_date) AS last_metric_date, COALESCE(SUM(m.views),0) AS views, COALESCE(SUM(m.likely_human_views),0) AS likely_human_views, COALESCE(SUM(m.bot_views),0) AS bot_views, COALESCE(SUM(m.unknown_views),0) AS unknown_views, COALESCE(SUM(m.human_engaged_visits),0) AS human_engaged_visits, COALESCE(SUM(m.us_likely_human_views),0) AS us_likely_human_views, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.unique_visitors ELSE 0 END),0) AS unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 AND m.unique_sample_interval=1 THEN m.us_unique_visitors ELSE 0 END),0) AS us_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.unique_visitors ELSE 0 END),0) AS sampled_unique_visitors, COALESCE(SUM(CASE WHEN m.metric_date=? THEN m.us_unique_visitors ELSE 0 END),0) AS sampled_us_unique_visitors, COALESCE(MAX(CASE WHEN m.metric_date=? THEN m.unique_sample_interval ELSE 1 END),1) AS sampled_unique_sample_interval, COALESCE(SUM(m.clicks),0) AS clicks, COALESCE(MAX(m.max_sample_interval),1) AS max_sample_interval, COALESCE(MAX(CASE WHEN m.metric_date>=? AND m.telemetry_version>=4 THEN m.unique_sample_interval ELSE 1 END),1) AS unique_sample_interval, (SELECT COUNT(*) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1) AS phone_actions, (SELECT COUNT(DISTINCT COALESCE(c.visitor_id_hash,c.id)) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1 AND c.likely_human=1) AS unique_phone_actions, (SELECT COUNT(*) FROM clicks c WHERE c.domain_id=d.id AND c.action_type='phone' AND c.measurement_eligible=1 AND c.country='US' AND c.visitor_id_hash IS NOT NULL AND length(c.visitor_id_hash)=64 AND c.visitor_id_hash NOT GLOB '*[^0-9a-f]*') AS valid_visitor_call_requests, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id) AS provider_recorded_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='accepted') AS provider_confirmed_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='pending') AS provider_pending_calls, (SELECT COUNT(*) FROM conversions cv WHERE cv.domain_id=d.id AND cv.status='rejected') AS provider_unsuccessful_calls FROM domains d LEFT JOIN daily_domain_metrics m ON m.domain_id=d.id AND m.metric_date>=?${domainWhere} GROUP BY d.id,d.hostname,d.lifecycle_status,d.active_release_id,d.measurement_started_at ORDER BY d.hostname`,
       ).bind(...domainBinds).all<OverviewDomainRow>(),
       c.env.DB.prepare("SELECT id,metric_date,status,domain_rows,country_rows,source_rows,canary_rows,expected_canaries,observed_canaries,canary_sample_interval,telemetry_verified,max_sample_interval,unique_sample_interval,error_message,started_at,completed_at FROM analytics_rollup_runs ORDER BY started_at DESC LIMIT 1").first(),
       c.env.DB.prepare("SELECT h.domain_id,h.status,h.http_status,h.latency_ms,h.expected_release_id,h.observed_release_id,h.error_message,h.checked_at FROM tenant_health_checks h JOIN (SELECT domain_id,MAX(checked_at) AS checked_at FROM tenant_health_checks GROUP BY domain_id) latest ON latest.domain_id=h.domain_id AND latest.checked_at=h.checked_at").all<LatestTenantHealthRow>(),
-      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM clicks WHERE action_type='phone' AND measurement_eligible=1) AS phone_actions,(SELECT COUNT(DISTINCT domain_id || ':' || COALESCE(visitor_id_hash,id)) FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND likely_human=1) AS unique_phone_actions,(SELECT COUNT(*) FROM conversions WHERE status='accepted') AS provider_confirmed_calls,(SELECT COUNT(*) FROM conversions WHERE status='pending') AS provider_pending_calls,(SELECT COUNT(*) FROM conversions WHERE status='rejected') AS provider_unsuccessful_calls,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks").first<MonetizationStateRow>(),
+      c.env.DB.prepare("SELECT (SELECT COUNT(*) FROM offers WHERE status='active') AS active_offers,(SELECT COUNT(*) FROM affiliate_campaigns WHERE status='active') AS active_campaigns,(SELECT COUNT(*) FROM routing_policies WHERE status='active') AS active_routing_policies,(SELECT COUNT(*) FROM clicks) AS clicks,(SELECT COUNT(*) FROM clicks WHERE action_type='phone' AND measurement_eligible=1) AS phone_actions,(SELECT COUNT(DISTINCT domain_id || ':' || COALESCE(visitor_id_hash,id)) FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND likely_human=1) AS unique_phone_actions,(SELECT COUNT(*) FROM clicks WHERE action_type='phone' AND measurement_eligible=1 AND country='US' AND visitor_id_hash IS NOT NULL AND length(visitor_id_hash)=64 AND visitor_id_hash NOT GLOB '*[^0-9a-f]*') AS valid_visitor_call_requests,(SELECT COUNT(*) FROM conversions WHERE status='accepted') AS provider_confirmed_calls,(SELECT COUNT(*) FROM conversions WHERE status='pending') AS provider_pending_calls,(SELECT COUNT(*) FROM conversions WHERE status='rejected') AS provider_unsuccessful_calls,(SELECT COUNT(*) FROM conversions) AS conversions,(SELECT COUNT(*) FROM postback_inbox) AS postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='failed') AS failed_postbacks,(SELECT COUNT(*) FROM postback_inbox WHERE processing_status='rejected') AS rejected_postbacks").first<MonetizationStateRow>(),
       c.env.DB.prepare("SELECT d.hostname,o.provider,o.external_id AS offer_external_id,ac.external_id AS campaign_external_id,ac.destination_type,o.status AS offer_status,ac.status AS campaign_status,rp.status AS routing_status FROM routing_policies rp JOIN domains d ON d.id=rp.domain_id JOIN offers o ON o.id=rp.offer_id LEFT JOIN affiliate_campaigns ac ON ac.id=rp.campaign_id AND ac.offer_id=o.id WHERE rp.status='active' ORDER BY d.hostname,rp.priority,rp.id").all<ActiveMonetizationRouteRow>(),
     ]);
     const coverage = await c.env.DB.prepare("SELECT MAX(metric_date) AS metric_date,COUNT(DISTINCT metric_date) AS successful_days,COUNT(DISTINCT CASE WHEN telemetry_verified=1 THEN metric_date END) AS telemetry_verified_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 THEN metric_date END) AS exact_session_days,COUNT(DISTINCT CASE WHEN metric_date>=? AND unique_sample_interval=1 AND telemetry_verified=1 THEN metric_date END) AS decision_grade_days FROM analytics_rollup_runs WHERE status='succeeded' AND metric_date>=? AND metric_date<=?")
@@ -365,6 +372,7 @@ export function mountApi(app: App): void {
       clicks: Number(monetizationState?.clicks ?? 0),
       phoneActions: Number(monetizationState?.phone_actions ?? 0),
       uniquePhoneActions: Number(monetizationState?.unique_phone_actions ?? 0),
+      validVisitorCallRequests: Number(monetizationState?.valid_visitor_call_requests ?? 0),
       providerConfirmedCalls: Number(monetizationState?.provider_confirmed_calls ?? 0),
       providerRecordedCalls: Number(monetizationState?.conversions ?? 0),
       qualifiedCalls: Number(monetizationState?.provider_confirmed_calls ?? 0),

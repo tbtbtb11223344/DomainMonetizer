@@ -39,7 +39,7 @@ function Chart({ points }: { points: AnalyticsPoint[] }) {
   const visitorGradient = useId().replaceAll(":", "");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const visitorMax = Math.max(1, ...points.map((point) => point.usQualifiedVisitors ?? 0));
-  const callMax = Math.max(1, ...points.map((point) => point.providerRecordedCalls));
+  const callMax = Math.max(1, ...points.map((point) => point.validVisitorCallRequests));
   const x = (index: number) => LEFT + (points.length === 1 ? PLOT_WIDTH / 2 : index * PLOT_WIDTH / (points.length - 1));
   const visitorY = (value: number) => VISITOR_BOTTOM - (value / visitorMax) * (VISITOR_BOTTOM - VISITOR_TOP);
   const callY = (value: number) => CLICK_BOTTOM - (value / callMax) * (CLICK_BOTTOM - CLICK_TOP);
@@ -60,10 +60,10 @@ function Chart({ points }: { points: AnalyticsPoint[] }) {
   return <div className="analytics-chart-shell">
     <div className="analytics-legend" aria-hidden="true">
       <span><i className="legend-line visitors" /> U.S. qualified visitors</span>
-      <span><i className="legend-line calls" /> Marketcall-recorded calls</span>
+      <span><i className="legend-line calls" /> Valid visitor call requests</span>
       <span><i className="legend-line estimated" /> Estimate</span>
     </div>
-    {!points.length ? <div className="analytics-empty">No completed UTC days are available in this range.</div> : <svg className="analytics-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Daily U.S. qualified visitors and Marketcall-recorded calls">
+    {!points.length ? <div className="analytics-empty">No completed UTC days are available in this range.</div> : <svg className="analytics-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Daily U.S. qualified visitors and valid visitor call requests">
       <defs>
         <linearGradient id={visitorGradient} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#245cff" stopOpacity="0.14" />
@@ -79,7 +79,7 @@ function Chart({ points }: { points: AnalyticsPoint[] }) {
         <text className="chart-axis-value" x={LEFT - 14} y={CLICK_BOTTOM - ratio * (CLICK_BOTTOM - CLICK_TOP) + 4}>{Math.round(callMax * ratio)}</text>
       </g>)}
       <text className="chart-plot-label" x={LEFT} y={20}>QUALIFIED AUDIENCE</text>
-      <text className="chart-plot-label" x={LEFT} y={272}>PROVIDER CALLS</text>
+      <text className="chart-plot-label" x={LEFT} y={272}>VALID CALL REQUESTS</text>
       {visitorAreaSegments.filter((segment) => segment.length > 1).map((segment) => <path key={`area-${segment[0]!.index}`} className="visitor-area" fill={`url(#${visitorGradient})`} d={`M ${segment.map(({ index, value }) => `${x(index)},${visitorY(value)}`).join(" L ")} L ${x(segment.at(-1)!.index)},${VISITOR_BOTTOM} L ${x(segment[0]!.index)},${VISITOR_BOTTOM} Z`} />)}
       {points.slice(0, -1).map((point, index) => {
         const next = points[index + 1]!;
@@ -89,12 +89,12 @@ function Chart({ points }: { points: AnalyticsPoint[] }) {
       })}
       {points.slice(0, -1).map((point, index) => {
         const next = points[index + 1]!;
-        return <line key={`call-${point.date}`} className="click-series" x1={x(index)} y1={callY(point.providerRecordedCalls)} x2={x(index + 1)} y2={callY(next.providerRecordedCalls)} />;
+        return <line key={`call-${point.date}`} className="click-series" x1={x(index)} y1={callY(point.validVisitorCallRequests)} x2={x(index + 1)} y2={callY(next.validVisitorCallRequests)} />;
       })}
       {points.map((point, index) => <g key={point.date}>
         {point.usQualifiedVisitors !== null && <circle className={`visitor-point ${point.visitorQuality}`} cx={x(index)} cy={visitorY(point.usQualifiedVisitors)} r="4.5" />}
-        <circle className="click-point" cx={x(index)} cy={callY(point.providerRecordedCalls)} r="4.5" />
-        <rect className="chart-hit" x={x(index) - Math.max(1, PLOT_WIDTH / Math.max(points.length, 1) / 2)} y={0} width={Math.max(2, PLOT_WIDTH / Math.max(points.length, 1))} height={HEIGHT - 28} tabIndex={0} role="button" aria-label={`${dateLabel(point.date, true)}: ${point.usQualifiedVisitors === null ? "visitor data unavailable" : `${point.usQualifiedVisitors} U.S. qualified visitors`}, ${point.providerRecordedCalls} Marketcall-recorded calls, ${point.qualifiedCalls} qualified calls`} onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)} onFocus={() => setActiveIndex(index)} onBlur={() => setActiveIndex(null)} />
+        <circle className="click-point" cx={x(index)} cy={callY(point.validVisitorCallRequests)} r="4.5" />
+        <rect className="chart-hit" x={x(index) - Math.max(1, PLOT_WIDTH / Math.max(points.length, 1) / 2)} y={0} width={Math.max(2, PLOT_WIDTH / Math.max(points.length, 1))} height={HEIGHT - 28} tabIndex={0} role="button" aria-label={`${dateLabel(point.date, true)}: ${point.usQualifiedVisitors === null ? "visitor data unavailable" : `${point.usQualifiedVisitors} U.S. qualified visitors`}, ${point.validVisitorCallRequests} valid visitor call requests, ${point.providerRecordedCalls} Marketcall-recorded calls, ${point.qualifiedCalls} qualified calls`} onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)} onFocus={() => setActiveIndex(index)} onBlur={() => setActiveIndex(null)} />
       </g>)}
       {labelIndexes.map((index) => <text key={points[index]!.date} className="chart-axis-date" x={x(index)} y={416}>{dateLabel(points[index]!.date)}</text>)}
       {active && <g className="chart-crosshair" pointerEvents="none">
@@ -104,7 +104,8 @@ function Chart({ points }: { points: AnalyticsPoint[] }) {
     {active && <div className="chart-tooltip" style={{ left: `${Math.min(82, Math.max(18, (x(activeIndex!) / WIDTH) * 100))}%` }}>
       <strong>{dateLabel(active.date, true)}</strong>
       <span><i className="tooltip-dot visitors" /> U.S. qualified <b>{active.usQualifiedVisitors === null ? "—" : `${active.visitorQuality === "estimated" ? "≈" : ""}${number(active.usQualifiedVisitors)}`}</b></span>
-      <span><i className="tooltip-dot calls" /> Marketcall calls <b>{number(active.providerRecordedCalls)}</b></span>
+      <span><i className="tooltip-dot calls" /> Valid call requests <b>{number(active.validVisitorCallRequests)}</b></span>
+      <span>Marketcall recorded <b>{number(active.providerRecordedCalls)}</b></span>
       <span>Qualified <b>{number(active.qualifiedCalls)}</b></span>
       <span>Pending review <b>{number(active.pendingCalls)}</b></span>
       <span>Unsuccessful <b>{number(active.unsuccessfulCalls)}</b></span>
@@ -125,7 +126,7 @@ function summarySentence(data: AnalyticsTimeseries): string {
   const visitorPhrase = data.summary.coverageComplete
     ? `${data.summary.approximate ? "approximately " : ""}${number(data.summary.usQualifiedVisitors)} U.S. qualified visitors`
     : `${number(data.summary.usQualifiedVisitors)} visible U.S. qualified visitors across the available days`;
-  return `Across ${days} completed UTC day${days === 1 ? "" : "s"}, ${scope} recorded ${visitorPhrase}. Marketcall reported ${number(data.summary.providerRecordedCalls)} call${data.summary.providerRecordedCalls === 1 ? "" : "s"}, including ${number(data.summary.qualifiedCalls)} qualified.`;
+  return `Across ${days} completed UTC day${days === 1 ? "" : "s"}, ${scope} recorded ${visitorPhrase} and ${number(data.summary.validVisitorCallRequests)} valid visitor call request${data.summary.validVisitorCallRequests === 1 ? "" : "s"}. Marketcall recorded ${number(data.summary.providerRecordedCalls)} call${data.summary.providerRecordedCalls === 1 ? "" : "s"}, including ${number(data.summary.qualifiedCalls)} qualified.`;
 }
 
 export function AnalyticsView() {
@@ -167,10 +168,11 @@ export function AnalyticsView() {
     <Chart points={data.points} />
 
     <div className="analytics-readout">
-      <p>{summarySentence(data)} Phone-button clicks and `tel:` handoffs are excluded from every call total.</p>
+      <p>{summarySentence(data)} A call request counts only when the U.S. phone handoff carries a valid first-party visitor cookie; cookieless and operator-excluded requests do not count.</p>
       <div className="analytics-metrics">
         <Metric label="U.S. qualified" value={`${summary.approximate ? "≈" : ""}${number(summary.usQualifiedVisitors)}`} comparison={delta(comparison?.usQualifiedVisitorsChange ?? null, comparison)} />
-        <Metric label="Marketcall calls" value={number(summary.providerRecordedCalls)} comparison={delta(comparison?.providerRecordedCallsChange ?? null, comparison)} />
+        <Metric label="Valid call requests" value={number(summary.validVisitorCallRequests)} comparison={delta(comparison?.validVisitorCallRequestsChange ?? null, comparison)} />
+        <Metric label="Marketcall recorded" value={number(summary.providerRecordedCalls)} />
         <Metric label="Qualified calls" value={number(summary.qualifiedCalls)} comparison={delta(comparison?.qualifiedCallsChange ?? null, comparison)} />
         <Metric label="Pending review" value={number(summary.pendingCalls)} />
         <Metric label="Unsuccessful" value={number(summary.unsuccessfulCalls)} />
@@ -179,9 +181,9 @@ export function AnalyticsView() {
     </div>
 
     <div className="analytics-detail">
-      <div className="analytics-detail-head"><div><p className="kicker">{data.scope.hostname ? "Daily detail" : "Domain performance"}</p><h2>{data.scope.hostname ? data.scope.hostname : "Marketcall outcomes"}</h2></div><span>{data.scope.hostname ? "Newest first" : `${data.rankings.length} measured domains`}</span></div>
-      {data.scope.hostname ? <div className="analytics-table"><table><thead><tr><th>Date</th><th>U.S. qualified</th><th>Marketcall calls</th><th>Qualified</th><th>Pending</th><th>Unsuccessful</th></tr></thead><tbody>{[...data.points].reverse().map((point) => <tr key={point.date}><td><strong>{dateLabel(point.date, true)}</strong><small>{qualityLabel(point)}</small></td><td>{point.usQualifiedVisitors === null ? "—" : `${point.visitorQuality === "estimated" ? "≈" : ""}${number(point.usQualifiedVisitors)}`}</td><td>{number(point.providerRecordedCalls)}</td><td>{number(point.qualifiedCalls)}</td><td>{number(point.pendingCalls)}</td><td>{number(point.unsuccessfulCalls)}</td></tr>)}</tbody></table>{!data.points.length && <div className="analytics-empty compact">No completed UTC days are available for this domain.</div>}</div>
-      : <div className="analytics-table"><table><thead><tr><th>Domain</th><th>U.S. qualified</th><th>Marketcall calls</th><th>Qualified</th><th>Pending</th><th>Unsuccessful</th></tr></thead><tbody>{data.rankings.map((row) => <tr key={row.domainId}><td><button className="analytics-domain-button" onClick={() => setDomainId(row.domainId)}><strong>{row.hostname}</strong><small>{row.coverageComplete ? row.approximate ? "Includes estimates" : "Complete" : "Partial coverage"}</small></button></td><td>{row.coverageComplete ? `${row.approximate ? "≈" : ""}${number(row.usQualifiedVisitors)}` : number(row.usQualifiedVisitors)}</td><td>{number(row.providerRecordedCalls)}</td><td>{number(row.qualifiedCalls)}</td><td>{number(row.pendingCalls)}</td><td>{number(row.unsuccessfulCalls)}</td></tr>)}</tbody></table>{!data.rankings.length && <div className="analytics-empty compact">No measured domains are available.</div>}</div>}
+      <div className="analytics-detail-head"><div><p className="kicker">{data.scope.hostname ? "Daily detail" : "Domain performance"}</p><h2>{data.scope.hostname ? data.scope.hostname : "Call requests and outcomes"}</h2></div><span>{data.scope.hostname ? "Newest first" : `${data.rankings.length} measured domains`}</span></div>
+      {data.scope.hostname ? <div className="analytics-table"><table><thead><tr><th>Date</th><th>U.S. qualified</th><th>Valid requests</th><th>Marketcall recorded</th><th>Qualified</th><th>Pending</th><th>Unsuccessful</th></tr></thead><tbody>{[...data.points].reverse().map((point) => <tr key={point.date}><td><strong>{dateLabel(point.date, true)}</strong><small>{qualityLabel(point)}</small></td><td>{point.usQualifiedVisitors === null ? "—" : `${point.visitorQuality === "estimated" ? "≈" : ""}${number(point.usQualifiedVisitors)}`}</td><td>{number(point.validVisitorCallRequests)}</td><td>{number(point.providerRecordedCalls)}</td><td>{number(point.qualifiedCalls)}</td><td>{number(point.pendingCalls)}</td><td>{number(point.unsuccessfulCalls)}</td></tr>)}</tbody></table>{!data.points.length && <div className="analytics-empty compact">No completed UTC days are available for this domain.</div>}</div>
+      : <div className="analytics-table"><table><thead><tr><th>Domain</th><th>U.S. qualified</th><th>Valid requests</th><th>Marketcall recorded</th><th>Qualified</th><th>Pending</th><th>Unsuccessful</th></tr></thead><tbody>{data.rankings.map((row) => <tr key={row.domainId}><td><button className="analytics-domain-button" onClick={() => setDomainId(row.domainId)}><strong>{row.hostname}</strong><small>{row.coverageComplete ? row.approximate ? "Includes estimates" : "Complete" : "Partial coverage"}</small></button></td><td>{row.coverageComplete ? `${row.approximate ? "≈" : ""}${number(row.usQualifiedVisitors)}` : number(row.usQualifiedVisitors)}</td><td>{number(row.validVisitorCallRequests)}</td><td>{number(row.providerRecordedCalls)}</td><td>{number(row.qualifiedCalls)}</td><td>{number(row.pendingCalls)}</td><td>{number(row.unsuccessfulCalls)}</td></tr>)}</tbody></table>{!data.rankings.length && <div className="analytics-empty compact">No measured domains are available.</div>}</div>}
       {summary.unattributedProviderRecordedCalls > 0 && <p className="unattributed-note"><strong>{number(summary.unattributedProviderRecordedCalls)} Marketcall-recorded call{summary.unattributedProviderRecordedCalls === 1 ? " is" : "s are"} unattributed.</strong> Shared-number provider events without an exact click ID remain in the portfolio total but outside domain rows.{summary.unattributedQualifiedCalls > 0 ? ` ${number(summary.unattributedQualifiedCalls)} of those calls qualified.` : ""}</p>}
     </div>
   </section>;

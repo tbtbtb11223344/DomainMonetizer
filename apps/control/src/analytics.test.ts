@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyticsBounds, analyticsRunSelectionSql, buildAnalyticsResponse, parseAnalyticsRange, type BuildAnalyticsInput } from "./analytics";
+import { analyticsBounds, analyticsCallRequestAggregationSql, analyticsRunSelectionSql, buildAnalyticsResponse, parseAnalyticsRange, type BuildAnalyticsInput } from "./analytics";
 
 const domains = [
   { id: "dom_a", hostname: "alpha.example", measurement_started_at: "2026-08-01T00:00:00.000Z" },
@@ -26,6 +26,11 @@ function input(overrides: Partial<BuildAnalyticsInput> = {}): BuildAnalyticsInpu
       { domain_id: "dom_a", metric_date: "2026-08-11", verified: 1 },
       { domain_id: "dom_a", metric_date: "2026-08-12", verified: 1 },
       { domain_id: "dom_b", metric_date: "2026-08-12", verified: 1 },
+    ],
+    callRequests: [
+      { domain_id: "dom_a", metric_date: "2026-08-11", valid_visitor_call_requests: 2 },
+      { domain_id: "dom_a", metric_date: "2026-08-12", valid_visitor_call_requests: 1 },
+      { domain_id: "dom_b", metric_date: "2026-08-12", valid_visitor_call_requests: 2 },
     ],
     conversions: [
       { domain_id: "dom_a", metric_date: "2026-08-11", provider_recorded_calls: 2, qualified_calls: 1, pending_calls: 0, unsuccessful_calls: 1 },
@@ -63,6 +68,18 @@ describe("analytics range contract", () => {
     expect(latestRunSubquery).not.toContain("status='succeeded'");
     expect(sql).toContain("WHERE r.status='succeeded'");
   });
+
+  it("counts only U.S. phone requests carrying a valid visitor-cookie hash", () => {
+    const portfolioSql = analyticsCallRequestAggregationSql(false);
+    expect(portfolioSql).toContain("action_type='phone'");
+    expect(portfolioSql).toContain("measurement_eligible=1");
+    expect(portfolioSql).toContain("country='US'");
+    expect(portfolioSql).toContain("visitor_id_hash IS NOT NULL");
+    expect(portfolioSql).toContain("length(visitor_id_hash)=64");
+    expect(portfolioSql).toContain("visitor_id_hash NOT GLOB '*[^0-9a-f]*'");
+    expect(portfolioSql).not.toContain("COALESCE(visitor_id_hash,id)");
+    expect(analyticsCallRequestAggregationSql(true)).toContain("AND domain_id=?");
+  });
 });
 
 describe("analytics response", () => {
@@ -76,6 +93,7 @@ describe("analytics response", () => {
     ]);
     expect(response.summary).toMatchObject({
       usQualifiedVisitors: 18,
+      validVisitorCallRequests: 5,
       providerRecordedCalls: 5,
       qualifiedCalls: 2,
       pendingCalls: 1,
@@ -96,17 +114,18 @@ describe("analytics response", () => {
     expect(response.scope).toEqual({ domainId: "dom_b", hostname: "beta.example" });
     expect(response.rankings).toEqual([]);
     expect(response.points[0]).toMatchObject({ visitorQuality: "unavailable", visitorQualityReason: "not_measured" });
-    expect(response.points[1]).toMatchObject({ usQualifiedVisitors: 3, providerRecordedCalls: 1, qualifiedCalls: 0, pendingCalls: 1, unsuccessfulCalls: 0, telemetryVerified: true });
+    expect(response.points[1]).toMatchObject({ usQualifiedVisitors: 3, validVisitorCallRequests: 2, providerRecordedCalls: 1, qualifiedCalls: 0, pendingCalls: 1, unsuccessfulCalls: 0, telemetryVerified: true });
     expect(response.summary.unattributedProviderRecordedCalls).toBe(0);
   });
 
   it("ranks every measured domain and keeps unattributed calls out of rows", () => {
     const response = buildAnalyticsResponse(input({ bounds: { current: { start: "2026-08-12", end: "2026-08-12" }, previous: null } }));
 
-    expect(response.rankings.map((row) => [row.hostname, row.usQualifiedVisitors, row.providerRecordedCalls, row.qualifiedCalls])).toEqual([
-      ["alpha.example", 5, 1, 1],
-      ["beta.example", 3, 1, 0],
+    expect(response.rankings.map((row) => [row.hostname, row.usQualifiedVisitors, row.validVisitorCallRequests, row.providerRecordedCalls, row.qualifiedCalls])).toEqual([
+      ["beta.example", 3, 2, 1, 0],
+      ["alpha.example", 5, 1, 1, 1],
     ]);
+    expect(response.summary.validVisitorCallRequests).toBe(3);
     expect(response.summary.providerRecordedCalls).toBe(3);
     expect(response.summary.qualifiedCalls).toBe(1);
     expect(response.summary.unattributedProviderRecordedCalls).toBe(1);
@@ -119,7 +138,7 @@ describe("analytics response", () => {
 
     expect(response.comparison).toMatchObject({
       usQualifiedVisitorsChange: null,
-      providerRecordedCallsChange: 50,
+      validVisitorCallRequestsChange: 50,
       qualifiedCallsChange: 0,
     });
   });

@@ -130,6 +130,7 @@ export interface DomainMetricSummary {
   clicks: number;
   phone_actions: number;
   unique_phone_actions: number;
+  valid_visitor_call_requests: number;
   provider_recorded_calls: number;
   provider_confirmed_calls: number;
   provider_pending_calls: number;
@@ -165,6 +166,7 @@ export interface MetricsOverview {
     clicks: number;
     phoneActions: number;
     uniquePhoneActions: number;
+    validVisitorCallRequests: number;
     providerConfirmedCalls: number;
     providerRecordedCalls: number;
     qualifiedCalls: number;
@@ -194,6 +196,7 @@ export type AnalyticsRange = "7d" | "30d" | "all";
 export interface AnalyticsPoint {
   date: string;
   usQualifiedVisitors: number | null;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
@@ -208,6 +211,7 @@ export interface AnalyticsPoint {
 
 export interface AnalyticsSummary {
   usQualifiedVisitors: number;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
@@ -224,7 +228,7 @@ export interface AnalyticsSummary {
 export interface AnalyticsComparison {
   label: string;
   usQualifiedVisitorsChange: number | null;
-  providerRecordedCallsChange: number | null;
+  validVisitorCallRequestsChange: number | null;
   qualifiedCallsChange: number | null;
 }
 
@@ -232,6 +236,7 @@ export interface AnalyticsRanking {
   domainId: string;
   hostname: string;
   usQualifiedVisitors: number;
+  validVisitorCallRequests: number;
   providerRecordedCalls: number;
   qualifiedCalls: number;
   pendingCalls: number;
