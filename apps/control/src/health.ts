@@ -12,6 +12,14 @@ const HEALTH_SCHEDULE_MINUTE_UTC = 47;
 const HEALTH_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
 const HEALTH_TIMEOUT_MS = 8_000;
 
+export function scheduledHealthSlotTime(now: Date): Date {
+  const slot = new Date(now);
+  const slotHour = Math.floor(slot.getUTCHours() / 6) * 6;
+  slot.setUTCHours(slotHour, HEALTH_SCHEDULE_MINUTE_UTC, 0, 0);
+  if (slot.getTime() > now.getTime()) slot.setUTCHours(slot.getUTCHours() - 6);
+  return slot;
+}
+
 interface HealthDomain {
   id: string;
   hostname: string;
@@ -326,7 +334,7 @@ export async function checkPublishedTenants(
   request: typeof fetch = fetch,
   checkSource: HealthCheckSource = "manual",
 ): Promise<TenantHealthBatchResult> {
-  const checkedAt = now.toISOString();
+  const checkedAt = (checkSource === "scheduled" ? scheduledHealthSlotTime(now) : now).toISOString();
   const query = await env.DB.prepare(
     "SELECT id,hostname,active_release_id FROM domains WHERE lifecycle_status='published' AND active_release_id IS NOT NULL ORDER BY hostname LIMIT ?",
   ).bind(HEALTH_CHECK_LIMIT + 1).all<HealthDomain>();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkPublishedTenants, HEALTH_CHECK_LIMIT, scheduledHealthSlots, summarizeCurrentDaySchedule, summarizeTenantHealth } from "./health";
+import { checkPublishedTenants, HEALTH_CHECK_LIMIT, scheduledHealthSlotTime, scheduledHealthSlots, summarizeCurrentDaySchedule, summarizeTenantHealth } from "./health";
 
 interface CapturedStatement {
   sql: string;
@@ -30,6 +30,13 @@ function fakeDatabase(domains: unknown[]) {
 }
 
 describe("tenant health checks", () => {
+  it("normalizes duplicate scheduled deliveries to one six-hour slot", () => {
+    expect(scheduledHealthSlotTime(new Date("2026-08-16T00:47:22.000Z")).toISOString()).toBe("2026-08-16T00:47:00.000Z");
+    expect(scheduledHealthSlotTime(new Date("2026-08-16T00:47:51.000Z")).toISOString()).toBe("2026-08-16T00:47:00.000Z");
+    expect(scheduledHealthSlotTime(new Date("2026-08-16T06:47:51.000Z")).toISOString()).toBe("2026-08-16T06:47:00.000Z");
+    expect(scheduledHealthSlotTime(new Date("2026-08-16T00:46:59.000Z")).toISOString()).toBe("2026-08-15T18:47:00.000Z");
+  });
+
   it("tracks due health slots with a ten-minute scheduler grace", () => {
     expect(scheduledHealthSlots(new Date("2026-08-05T00:46:59.000Z"), "2026-08-05")).toEqual({ expectedByNow: 0, requiredByNow: 0 });
     expect(scheduledHealthSlots(new Date("2026-08-05T00:50:00.000Z"), "2026-08-05")).toEqual({ expectedByNow: 1, requiredByNow: 0 });

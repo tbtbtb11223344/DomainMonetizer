@@ -339,14 +339,14 @@ export function mountApi(app: App): void {
     const healthWindowEnd = new Date(`${latestCompletedDate}T00:00:00.000Z`);
     healthWindowEnd.setUTCDate(healthWindowEnd.getUTCDate() + 1);
     const scheduledHealth = expectedDays > 0
-      ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
+      ? await c.env.DB.prepare("SELECT domain_id,COUNT(DISTINCT CAST((unixepoch(checked_at)-2820)/21600 AS INTEGER)) AS scheduled_checks,COUNT(DISTINCT CASE WHEN status='ready' THEN CAST((unixepoch(checked_at)-2820)/21600 AS INTEGER) END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
         .bind(`${telemetryStartDate}T00:00:00.000Z`, healthWindowEnd.toISOString()).all<ScheduledTenantHealthRow>()
       : { results: [] as ScheduledTenantHealthRow[] };
     const currentDate = coverageNow.toISOString().slice(0, 10);
     const currentDayEnd = new Date(`${currentDate}T00:00:00.000Z`);
     currentDayEnd.setUTCDate(currentDayEnd.getUTCDate() + 1);
     const currentDayScheduledHealth = currentDate >= telemetryStartDate
-      ? await c.env.DB.prepare("SELECT domain_id,COUNT(*) AS scheduled_checks,SUM(CASE WHEN status='ready' THEN 1 ELSE 0 END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
+      ? await c.env.DB.prepare("SELECT domain_id,COUNT(DISTINCT CAST((unixepoch(checked_at)-2820)/21600 AS INTEGER)) AS scheduled_checks,COUNT(DISTINCT CASE WHEN status='ready' THEN CAST((unixepoch(checked_at)-2820)/21600 AS INTEGER) END) AS ready_scheduled_checks FROM tenant_health_checks WHERE check_source='scheduled' AND checked_at>=? AND checked_at<? GROUP BY domain_id")
         .bind(`${currentDate}T00:00:00.000Z`, currentDayEnd.toISOString()).all<ScheduledTenantHealthRow>()
       : { results: [] as ScheduledTenantHealthRow[] };
     const totals = domains.results.reduce<{ likelyHumanViews: number; uniqueVisitors: number; usUniqueVisitors: number; sampledUniqueVisitors: number; sampledUsUniqueVisitors: number; sampledUniqueSampleInterval: number; humanEngagedVisits: number; maxSampleInterval: number; uniqueSampleInterval: number }>((sum, row) => {

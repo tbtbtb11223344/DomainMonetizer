@@ -77,7 +77,7 @@ async function readCurrentDayCanaries(environment, schedule, allowedDomainIds) {
     throw new Error("Pilot canary scope is empty or contains invalid domain IDs");
   }
   const domainFilter = ` AND index1 IN (${allowed.map((value) => `'${value}'`).join(",")})`;
-  const sql = `SELECT index1 AS domain_id, count(DISTINCT blob7) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != ''${domainFilter} GROUP BY index1`;
+  const sql = `SELECT index1 AS domain_id, count(DISTINCT toStartOfInterval(timestamp - INTERVAL '47' MINUTE, INTERVAL '6' HOUR)) AS distinct_canaries, max(_sample_interval) AS max_sample_interval FROM ${dataset} WHERE timestamp >= toDateTime('${date} 00:00:00') AND timestamp < toDateTime('${nextUtcDate(date)} 00:00:00') AND blob1 = 'health_canary' AND blob8 = 'health_scheduled' AND blob7 != ''${domainFilter} GROUP BY index1`;
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiToken}`, "Content-Type": "text/plain" },

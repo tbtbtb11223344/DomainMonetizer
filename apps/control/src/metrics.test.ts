@@ -19,7 +19,7 @@ function fakeDatabase(queryResults: unknown[] = [], expectedCanaryResults: unkno
             sql,
             args,
             run: async () => ({ meta: { changes: 1 } }),
-            all: async <T>() => ({ results: (sql.includes("COUNT(h.id) AS expected_canaries") ? expectedCanaryResults : queryResults) as T[] }),
+            all: async <T>() => ({ results: (sql.includes("AS expected_canaries") ? expectedCanaryResults : queryResults) as T[] }),
           };
           statements.push(statement);
           return statement;
@@ -168,7 +168,7 @@ describe("analytics rollups", () => {
     expect(queryBodies.some((body) => body.includes("blob3 AS domain_id") && body.includes("AS unique_visitors") && body.includes("AS us_unique_visitors") && body.includes("blob1 = 'qualified_session_v4'") && body.includes("index1 IN ('qualified_v4:dom_1:0'") && body.includes("'qualified_v4:dom_1:f'") && body.includes("blob3 = 'dom_1'"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob11 AS path_class") && body.includes("blob12 AS device_class") && body.includes("blob13 AS referrer_class"))).toBe(true);
     expect(queryBodies.some((body) => body.includes("blob14 AS region_code") && body.includes("blob15 AS local_time_bucket"))).toBe(true);
-    expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'"))).toBe(true);
+    expect(queryBodies.some((body) => body.includes("blob1 = 'health_canary'") && body.includes("blob8 = 'health_scheduled'") && body.includes("toStartOfInterval(timestamp - INTERVAL '47' MINUTE, INTERVAL '6' HOUR)"))).toBe(true);
     expect(queryBodies.filter((body) => body.includes("sumIf") && body.includes("blob1 IN"))).toHaveLength(3);
     expect(batches).toHaveLength(1);
     const batch = batches[0]!;
