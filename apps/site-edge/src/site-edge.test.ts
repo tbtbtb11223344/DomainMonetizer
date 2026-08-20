@@ -44,9 +44,13 @@ function environment(overrides: Record<string, string> = {}, state: "live" | "pa
     ...Object.entries(overrides),
   ]);
   const events: unknown[] = [];
+  const kvReads: string[] = [];
   return {
     env: {
-      SITE_CONFIG: { get: async (key: string) => values.get(key) ?? null },
+      SITE_CONFIG: { get: async (key: string) => {
+        kvReads.push(key);
+        return values.get(key) ?? null;
+      } },
       EVENTS: { writeDataPoint: (point: unknown) => events.push(point) },
       CONTROL: { fetch: async () => new Response(null, { status: 404 }) },
       ASSETS: { fetch: async () => new Response("asset") },
@@ -56,7 +60,19 @@ function environment(overrides: Record<string, string> = {}, state: "live" | "pa
       ...envOverrides,
     },
     events,
+    kvReads,
   };
+}
+
+function memoryCache(): Cache {
+  const values = new Map<string, Response>();
+  return {
+    match: async (request: RequestInfo | URL) => values.get(String(request instanceof Request ? request.url : request))?.clone(),
+    put: async (request: RequestInfo | URL, response: Response) => {
+      values.set(String(request instanceof Request ? request.url : request), response.clone());
+    },
+    delete: async (request: RequestInfo | URL) => values.delete(String(request instanceof Request ? request.url : request)),
+  } as unknown as Cache;
 }
 
 function responseCookie(response: Response, name: string): string | undefined {
@@ -230,7 +246,36 @@ describe("site edge", () => {
     expect(readyPayload).toEqual({ ok: true, service: "site-edge", hostname: "pilot-example.com", state: "live", releaseId: "rel_test" });
     expect(ready.headers.get("Cache-Control")).toBe("no-store");
     expect(ready.headers.get("Set-Cookie")).toBeNull();
+    expect(ready.headers.get("X-DM-Snapshot-Cache")).toBe("bypass");
     expect(events).toHaveLength(0);
+  });
+
+  it("reuses a short-lived edge snapshot without caching tenant HTML", async () => {
+    const { env, events, kvReads } = environment({}, "live", { SNAPSHOT_CACHE: memoryCache() });
+    const first = await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
+    const second = await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
+
+    expect(first.headers.get("X-DM-Snapshot-Cache")).toBe("miss");
+    expect(second.headers.get("X-DM-Snapshot-Cache")).toBe("hit");
+    expect(first.headers.get("Cache-Control")).toBe("no-store");
+    expect(second.headers.get("Cache-Control")).toBe("no-store");
+    expect(kvReads).toEqual(["site:pilot-example.com:active", "release:rel_test"]);
+    expect(events).toHaveLength(0);
+  });
+
+  it("bypasses the snapshot cache for exact tenant readiness", async () => {
+    const { env, kvReads } = environment({}, "live", { SNAPSHOT_CACHE: memoryCache() });
+    await worker.fetch(new Request("https://pilot-example.com/", { method: "HEAD" }), env as never);
+    const ready = await worker.fetch(new Request("https://pilot-example.com/readyz"), env as never);
+
+    expect(ready.status).toBe(200);
+    expect(ready.headers.get("X-DM-Snapshot-Cache")).toBe("bypass");
+    expect(kvReads).toEqual([
+      "site:pilot-example.com:active",
+      "release:rel_test",
+      "site:pilot-example.com:active",
+      "release:rel_test",
+    ]);
   });
 
   it("records an authenticated readiness canary without creating visitor traffic", async () => {

@@ -16,6 +16,7 @@ interface AnalyticsEngineDataset {
 
 interface Env {
   SITE_CONFIG: KVNamespace;
+  SNAPSHOT_CACHE?: Cache;
   EVENTS: AnalyticsEngineDataset;
   CONTROL: Fetcher;
   ASSETS: Fetcher;
@@ -45,6 +46,15 @@ const QUALIFIED_DAY_COOKIE = "dm_qd";
 const QUALIFIED_SESSION_EVENT = "qualified_session_v4";
 const QUALIFIED_SESSION_INDEX_PREFIX = "qualified_v4:";
 const VISITOR_SESSION_SECONDS = 30 * 60;
+const SNAPSHOT_CACHE_NAME = "domain-monetizer-snapshots-v1";
+const SNAPSHOT_CACHE_SECONDS = 30;
+
+type SnapshotCacheStatus = "hit" | "miss" | "bypass" | "unavailable";
+
+interface SnapshotLoad {
+  snapshot: ReleaseSnapshot | null;
+  cacheStatus: SnapshotCacheStatus;
+}
 
 interface VisitorClassification {
   visitorClass: VisitorClass;
@@ -267,14 +277,53 @@ async function writeHealthCanary(request: Request, snapshot: ReleaseSnapshot, en
   ));
 }
 
-async function loadSnapshot(hostname: string, env: Env): Promise<ReleaseSnapshot | null> {
-  const pointer = await env.SITE_CONFIG.get(activePointerKey(hostname));
-  if (!pointer) return null;
-  const raw = await env.SITE_CONFIG.get(releaseKey(pointer));
-  if (!raw) return null;
-  const parsed = releaseSnapshotSchema.safeParse(JSON.parse(raw));
-  if (!parsed.success || parsed.data.hostname !== hostname || parsed.data.releaseId !== pointer) return null;
+function parseSnapshot(raw: string, hostname: string, expectedReleaseId?: string): ReleaseSnapshot | null {
+  let input: unknown;
+  try {
+    input = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const parsed = releaseSnapshotSchema.safeParse(input);
+  if (!parsed.success || parsed.data.hostname !== hostname) return null;
+  if (expectedReleaseId && parsed.data.releaseId !== expectedReleaseId) return null;
   return parsed.data;
+}
+
+function snapshotCacheKey(hostname: string): Request {
+  return new Request(`https://${hostname}/__dm/internal/${SNAPSHOT_CACHE_NAME}`, { method: "GET" });
+}
+
+async function snapshotCache(env: Env): Promise<Cache | null> {
+  if (env.SNAPSHOT_CACHE) return env.SNAPSHOT_CACHE;
+  if (typeof caches === "undefined") return null;
+  return caches.open(SNAPSHOT_CACHE_NAME).catch(() => null);
+}
+
+async function loadSnapshot(hostname: string, env: Env, bypassCache = false): Promise<SnapshotLoad> {
+  const cache = bypassCache ? null : await snapshotCache(env);
+  const cacheKey = cache ? snapshotCacheKey(hostname) : null;
+  if (cache && cacheKey) {
+    const cached = await cache.match(cacheKey).catch(() => undefined);
+    if (cached) {
+      const parsed = parseSnapshot(await cached.text(), hostname);
+      if (parsed) return { snapshot: parsed, cacheStatus: "hit" };
+      await cache.delete(cacheKey).catch(() => false);
+    }
+  }
+
+  const pointer = await env.SITE_CONFIG.get(activePointerKey(hostname));
+  if (!pointer) return { snapshot: null, cacheStatus: bypassCache ? "bypass" : cache ? "miss" : "unavailable" };
+  const raw = await env.SITE_CONFIG.get(releaseKey(pointer));
+  if (!raw) return { snapshot: null, cacheStatus: bypassCache ? "bypass" : cache ? "miss" : "unavailable" };
+  const parsed = parseSnapshot(raw, hostname, pointer);
+  if (!parsed) return { snapshot: null, cacheStatus: bypassCache ? "bypass" : cache ? "miss" : "unavailable" };
+  if (cache && cacheKey) {
+    await cache.put(cacheKey, new Response(raw, {
+      headers: { "Cache-Control": `public, max-age=${SNAPSHOT_CACHE_SECONDS}` },
+    })).catch(() => undefined);
+  }
+  return { snapshot: parsed, cacheStatus: bypassCache ? "bypass" : cache ? "miss" : "unavailable" };
 }
 
 async function visitorHash(request: Request, env: Env): Promise<string | null> {
@@ -370,7 +419,8 @@ async function handle(request: Request, env: Env): Promise<Response> {
     } catch {
       return errorResponse(400, "Invalid hostname");
     }
-    const snapshot = await loadSnapshot(hostname, env).catch(() => null);
+    const loaded = await loadSnapshot(hostname, env).catch(() => ({ snapshot: null, cacheStatus: "unavailable" as const }));
+    const snapshot = loaded.snapshot;
     if (snapshot) {
       return withHeaders(new Response(request.method === "HEAD" ? null : siteMarkSvg(snapshot.content), {
         headers: {
@@ -378,7 +428,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
           "Cache-Control": "public, max-age=3600",
           "ETag": `"site-mark-${snapshot.releaseId}"`,
         },
-      }));
+      }), { "X-DM-Snapshot-Cache": loaded.cacheStatus });
     }
   }
   if (url.pathname.startsWith("/__dm/")) return withHeaders(await env.ASSETS.fetch(request), { "Cache-Control": "public, max-age=86400, immutable" });
@@ -396,7 +446,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     url.hostname = hostname;
     return withHeaders(Response.redirect(url, 301), { "Cache-Control": "public, max-age=3600" });
   }
-  const snapshot = await loadSnapshot(hostname, env).catch(() => null);
+  const loaded = await loadSnapshot(hostname, env, url.pathname === "/readyz")
+    .catch(() => ({ snapshot: null, cacheStatus: "unavailable" as const }));
+  const snapshot = loaded.snapshot;
   if (url.pathname === "/readyz") {
     if (snapshot) await writeHealthCanary(request, snapshot, env);
     const live = snapshot?.state === "live";
@@ -406,7 +458,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
     return withHeaders(new Response(request.method === "HEAD" ? null : JSON.stringify(payload), {
       status: live ? 200 : 503,
       headers: { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-store" },
-    }));
+    }), { "X-DM-Snapshot-Cache": loaded.cacheStatus });
   }
   if (!snapshot) return errorResponse(404, "Site not configured");
   if (snapshot.state === "paused") return withHeaders(new Response(snapshot.html, { status: 503, headers: { "Content-Type": "text/html; charset=UTF-8", "Cache-Control": "no-store", "Retry-After": "300" } }));
@@ -436,7 +488,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     }
     headers.append("Set-Cookie", `${VISITOR_COOKIE}=${visitor.cookie}; Max-Age=${VISITOR_SESSION_SECONDS}; Path=/; Secure; HttpOnly; SameSite=Lax`);
   }
-  return withHeaders(new Response(request.method === "HEAD" ? null : snapshot.html, { headers }));
+  return withHeaders(new Response(request.method === "HEAD" ? null : snapshot.html, { headers }), {
+    "X-DM-Snapshot-Cache": loaded.cacheStatus,
+  });
 }
 
 export default {
